@@ -5,7 +5,7 @@ import torchvision.models as models
 
 class VGGencoder(nn.Module):
 
-    def __init__(self, segnet_:bool, pretrained=True, verbose=False):
+    def __init__(self, segnet_:bool=True, pretrained=True, verbose=False):
         super(VGGencoder, self).__init__()
         self.verbose = verbose
         # download pre-trained model with bn (batch normalization)
@@ -58,7 +58,7 @@ class VGGencoder(nn.Module):
         return x, indices, output_sizes
 
 if __name__ == '__main__':
-    encoder = VGGencoder(segnet_=True)
+    encoder = VGGencoder(segnet_=True, verbose=True)
     with torch.no_grad():
         print(encoder(torch.randn((1, 3, 128, 256)))[0].numpy().shape)
 

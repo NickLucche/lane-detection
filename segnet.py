@@ -3,6 +3,7 @@ import vgg16_decoder as decoder
 import torch
 import torch.nn as nn
 
+
 class Segnet(nn.Module):
 
     def __init__(self, verbose=False):

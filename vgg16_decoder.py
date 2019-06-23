@@ -6,6 +6,14 @@ class VGGDecoder(nn.Module):
     vgg_16_config = [64, 128, 256, 512, 512]
 
     def __init__(self, output_channels, verbose=False):
+        """
+        Instantiate the decoder needed to build the segnet model.
+        :param output_channels: number of channels the output needs
+                to have; this is referred as K, and it needs to be
+                the same as the number of classes we need to recognize
+                in a certain task.
+        :param verbose: 
+        """
         super(VGGDecoder, self).__init__()
         # self.decoder = utils.VGG16utils.make_decoder_layers(batch_norm=batch_norm)
         self.decoder = nn.ModuleList()
@@ -31,17 +39,6 @@ class VGGDecoder(nn.Module):
         for i, decoder in enumerate(self.decoder):
             x = decoder(x, indices[i], output_size[i])
 
-
-        # for layer in self.decoder.children():
-        #     print(layer)
-        #     # if self.verbose:
-        #     #     print(x.shape)
-        #     if isinstance(layer, nn.MaxUnpool2d):
-        #         print(x.shape, indices[pool_counter].shape)
-        #         x = layer(x, indices[pool_counter], output_size[pool_counter])
-        #         pool_counter += 1
-        #     else:
-        #         x = layer(x)
         return x
 
 class Decoder_block(nn.Module):
@@ -70,6 +67,6 @@ class Decoder_block(nn.Module):
 
 
 if __name__ == "__main__":
-    decoder = VGGDecoder(verbose=True)
+    decoder = VGGDecoder(3, verbose=True)
     #indeces must be tensor same shape as input all 0s but the max elem
 
