@@ -1,58 +1,19 @@
-from torchvision import transforms
 from torchvision import datasets
-from torch.utils.data import Dataset, DataLoader
-from torchvision import transforms, utils
-from skimage import io, transform
-import torch
+from torch.utils.data import Dataset
+from torch.utils.data import DataLoader
+from torchvision import transforms
+from skimage import io
 import os
 import json
 import random
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
+from cuda_device import device
+import torchvision.transforms.functional as F
 
 
-class TUSimpleBenchmarkDataLoader:
-
-    def __init__(self, root_dir:str=None, train_dirs:list=None, batch_size=8):
-        # self.root_dir = root_dir if root_dir else self.root_dir = '~/Desktop/train_set/clips'
-        # self.train_dirs = train_dirs if train_dirs else self.train_dirs = ['0601', '0531', '0313-1', '0313-2']
-
-        # Resize all images to 256x128
-        t = {train_dirs[i]: transforms.Compose([
-                # Data augmentation
-                # randomly flip it horizontally.
-                # transforms.RandomHorizontalFlip(),
-                transforms.ToTensor(),
-            ]) for i in range(len(train_dirs))}
-
-        data_transforms = {
-            *t
-        }
-
-        image_datasets = {
-            x: datasets.ImageFolder(
-                os.path.join(root_dir, x),
-                transform=data_transforms[x]
-            )
-            for x in train_dirs
-        }
-
-        # one data loader for each subfolder in 'clips' (see https://github.com/TuSimple/tusimple-benchmark/tree/master/doc/lane_detection)
-        #
-        dataloaders = {
-            x: torch.utils.data.DataLoader(
-                image_datasets[x], batch_size=batch_size,
-                shuffle=False, num_workers=4
-            )
-            for x in train_dirs
-        }
-
-        dataset_sizes = {x: len(image_datasets[x]) for x in train_dirs}
-
-
-
-class TUSimpleBenchmarkDataset(Dataset):
+class TUSimpleDataset(Dataset):
     """TUSimpleBenchmark dataset loader helper class. Filenames are kept in the
         __init__ method while actual image reading is delegated to __getitem__
         method. For more info see https://github.com/TuSimple/tusimple-benchmark/tree/master/doc/lane_detection.
@@ -77,17 +38,12 @@ class TUSimpleBenchmarkDataset(Dataset):
         self.sub_dirs = sub_dirs
         assert n_frames>=1 and n_frames<20
         self.n_frames = n_frames
-
+        self.transform = transforms if transforms else None
         # data labels are read just once here and stored
-        print("Loading data labels")
-        self.labels = [json.loads(line) for d_label in data_labels for line in open(d_label, 'r')]
-
-        # self.labels[d_label[-9:-5]] = json.load(f)
-
-        # also pre-compute length of dataset
-        # self.len = 0
-        # for l in self.labels:
-        #     self.len += len(l)
+        # print("Loading data labels")
+        labels = [json.loads(line) for d_label in data_labels for line in open(d_label, 'r')]
+        # create map for efficient access to annotations, at the cost of some memory
+        self.labels = {self.get_clip_id(label['raw_file']): label for label in labels}
 
         # load sample 'filenames' (actually just folder containing multiple frames)
         self.sample_folders = []
@@ -95,17 +51,18 @@ class TUSimpleBenchmarkDataset(Dataset):
             for sample_folder in os.listdir(os.path.join(root_dir, sub_folder)):
                 # add special char for recognizing target-samples
                 # self.sample_folders.append('~'.join([sub_folder, sample_folder]))
-                self.sample_folders.append(os.path.join(sub_folder, sample_folder))
+                if not sample_folder.startswith('.'):
+                    self.sample_folders.append(os.path.join(sub_folder, sample_folder))
 
+        assert len(self.sample_folders) == len(self.labels)
         if shuffle:
             random.seed(shuffle_seed)
             # sample folder maintains the structure in its name
             # hence we can retrieve the labels from it
             random.shuffle(self.sample_folders)
-            random.shuffle(self.labels)
 
     def __len__(self):
-        return len(self.labels)
+        return len(self.sample_folders)
 
     def __getitem__(self, idx):
         # split sample_folders to get label and images dir
@@ -115,25 +72,49 @@ class TUSimpleBenchmarkDataset(Dataset):
 
         # counting samples from target frame
         frames = []
-        for img_name in os.listdir(images_dir)[-self.n_frames:]:
-            frames.append(io.imread(img_name))
+        for img_name in range(1, 21)[-self.n_frames:]:
+            img_name = str(img_name) + ".jpg"
+            # print("Loading", os.path.join(images_dir, img_name))
+            frames.append(io.imread(os.path.join(images_dir, img_name)).astype(np.uint8))
 
-        # special case
-        # if label_file.startsWith('0313'):
-        #     label_file = '0313'
+        label_key = self.sample_folders[idx]
+        label = self.labels[label_key]
 
-        target_d = self.labels[label_file]
-        # target = get_annotated_image(target_d['lanes'] )
+        assert label_key == label['raw_file'].replace('clips/', '').replace('/20.jpg', '')
+        # print("Subfolder key:",label_key)
+        # print("Full folder:", images_dir)
+        # print("Target:", label['raw_file'])
 
+        lanes = label['lanes']
+        height = label['h_samples']
+        target_ = self.get_target(lanes, height, frames[0].shape)  # all samples are assumed to be of same shape
         if self.transform:
-            for sample in frames:
-                sample = self.transform(sample)
+            frames = [self.transform(F.to_pil_image(sample)).to(device) for sample in frames]
+            target_ = self.transform(F.to_pil_image(target_)).to(device)
 
-        return frames
+        return frames, target_
 
 
-    def get_label_dict(self, label_file:str, sample_folder_name:str):
-        pass
+    def get_target(self, lanes:list, heights:list, shape:tuple, normalized:bool=True):
+        gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, heights) if x >= 0] for lane in lanes]
+        # target is a probability map
+        image = np.zeros((shape[0], shape[1], 1))
+        # return 0-1 normalized image
+        c = (255, 255, 255) if not normalized else (1, 1, 1)
+        for lane in gt_lanes_vis:
+            cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=5)
+
+        return image.astype(np.uint8)
+
+    def get_clip_id(self, filename:str):
+        # clip unique id is made of dataset subfolder+clip_folder
+        if filename.endswith('.jpg'):
+            # raw_file field was passed
+            chunks = filename.split('/')
+            return '/'.join([chunks[1], chunks[2]])
+        else:
+            # sample absolute path was passed
+            pass
 
 
 
@@ -141,8 +122,17 @@ class TUSimpleBenchmarkDataset(Dataset):
 #                           so that no bias comes from data ordering.
 
 
-def show_plain_image():
-    pass
+def show_plain_images(images, n_frames):
+    plt.figure(num=None, figsize=(20, 4), dpi=80)
+    for i in range(n_frames):
+        ax = plt.subplot(1, n_frames, i + 1)
+        if images[i].shape[0] > 1:
+            ax.imshow(images[i].permute(1, 2, 0).numpy())
+        else:
+            ax.imshow(images[i].squeeze().numpy(), cmap='gray')
+        ax.get_xaxis().set_visible(False)
+        ax.get_yaxis().set_visible(False)
+    plt.show()
 
 
 def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=None):
@@ -165,16 +155,52 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
 
     for lane in gt_lanes_vis:
         cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=5)
-
+    # normalize image/255
     plt.imshow(image, cmap='gray')
     plt.show()
     return image
 
+
+# original values: 3626 train sample - 2782 test samples
 if __name__ == '__main__':
-    # with open('/Users/nick/Desktop/train_set/label_data_0313.json', 'r') as f:
-    #     labels = json.load(f)
-    labels = [json.loads(line) for line in open('/Users/nick/Desktop/train_set/label_data_0313.json', 'r')]
-    lanes = labels[0]['lanes']
-    height = labels[0]['h_samples']
-    frame = os.path.join('/Users/nick/Desktop/train_set', labels[0]['raw_file'])
-    show_annotated_image(lanes, height)
+    # labels = [json.loads(line) for line in open('/Users/nick/Desktop/train_set/label_data_0313.json', 'r')]
+    # lanes = labels[0]['lanes']
+    # height = labels[0]['h_samples']
+    # frame = os.path.join('/Users/nick/Desktop/train_set', labels[0]['raw_file'])
+    # show_annotated_image(lanes, height)
+    root = '/Users/nick/Desktop/train_set/clips/'
+    subdirs = ['0601', '0531', '0313-1', '0313-2']
+    flabels = ['/Users/nick/Desktop/train_set/label_data_0601.json',
+               '/Users/nick/Desktop/train_set/label_data_0531.json',
+               '/Users/nick/Desktop/train_set/label_data_0313.json']
+    # toTensor will make sure channel ordering is 'pytorch-style' image = image.transpose((2, 0, 1))
+
+    data_transform = transforms.Compose([
+        transforms.Resize((128, 256)),
+        # transforms.RandomHorizontalFlip(), #need to apply flip to all samples and target too
+        transforms.ToTensor(),
+    ])
+    tu_dataset = TUSimpleDataset(root, subdirs, flabels, transforms=data_transform, shuffle_seed=9)
+
+    # build data loader
+    tu_dataloader = DataLoader(tu_dataset, batch_size=2, shuffle=True, num_workers=2)
+    # ([input_tensor_1, input_tensor_2], label_tensor) -> (
+    # [batched_input_tensor_1, batched_input_tensor_2], batched_label_tensor)
+    tu_test_dataset =  TUSimpleDataset(root.replace('train_set', 'test_set'), ['0601', '0531', '0530'], ['/Users/nick/Desktop/test_set/test_labels.json'], transforms=data_transform)
+
+    for i, (frames, target) in enumerate(tu_test_dataset):
+        print("test set length:", len(tu_dataset))
+        print("Sizes:", frames[0].size(), target.size())
+        # print("N-samples", len(samples))
+        show_plain_images(frames + [target], len(frames) + 1)
+
+
+    for i, (batched_samples, batched_target) in enumerate(tu_dataloader):
+
+        print(batched_samples[0].size(), batched_target.size())
+        break
+        # here result is a tensor, with channel first format
+        # samples, target = tu_dataset[i]
+        print("Sizes:", samples[0].size(), target.size())
+        # print("N-samples", len(samples))
+        show_plain_images(samples + [target], len(samples) + 1)

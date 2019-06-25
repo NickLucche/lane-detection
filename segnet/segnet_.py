@@ -1,5 +1,4 @@
-import vgg_16_encoder as encoder
-import vgg16_decoder as decoder
+from segnet import vgg_16_encoder as encoder, vgg16_decoder as decoder
 import torch
 import torch.nn as nn
 

@@ -1,10 +1,6 @@
 import torch
-import torch.nn as nn
-import vgg16_decoder
-import vgg_16_encoder
-import convlstm
-from torch.autograd import Variable
-
+from segnet import vgg_16_encoder, vgg16_decoder
+from lstm import convlstm
 
 if __name__ == '__main__':
     with torch.no_grad():
@@ -23,7 +19,7 @@ if __name__ == '__main__':
 
         print("Encoded images sequence:", enc_image_seq.unsqueeze(0).size())
         enc_image_seq = enc_image_seq.unsqueeze(0)
-        convlstm = convlstm.ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=512, kernel_size=(3,3), num_layers=4, batch_first=True)
+        convlstm = convlstm.ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=512, kernel_size=(3, 3), num_layers=4, batch_first=True)
         _, last_state = convlstm(enc_image_seq)
         print("LSTM Output {} ".format(last_state[0][0].size()))    # get LATEST lstm hidden state as a repr summary
 
