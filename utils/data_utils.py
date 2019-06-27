@@ -9,7 +9,7 @@ import random
 import numpy as np
 import cv2
 import matplotlib.pyplot as plt
-from cuda_device import device
+from utils.cuda_device import device
 import torchvision.transforms.functional as F
 
 
@@ -192,6 +192,10 @@ if __name__ == '__main__':
         print("test set length:", len(tu_dataset))
         print("Sizes:", frames[0].size(), target.size())
         # print("N-samples", len(samples))
+
+        # resize to original image size (needed for TuSimple evaluation)
+        target = transforms.Resize((720, 1280))(F.to_pil_image(target))
+        target = transforms.ToTensor()(target)
         show_plain_images(frames + [target], len(frames) + 1)
 
 

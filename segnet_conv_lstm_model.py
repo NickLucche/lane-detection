@@ -10,9 +10,11 @@ from torchvision import transforms
 
 class SegnetConvLSTM(nn.Module):
 
-    def __init__(self, lstm_nlayers:int=4, decoder_out_channels:int=1):
+    def __init__(self, lstm_nlayers:int=4, decoder_out_channels:int=1, verbose=False):
         super(SegnetConvLSTM, self).__init__()
         # most parameters are tailored to this specific dataset/use-case
+        self.n_classes = decoder_out_channels
+        self.v = verbose
 
         # define encoder-decoder structure
         self.encoder = encoder.VGGencoder()
@@ -37,11 +39,12 @@ class SegnetConvLSTM(nn.Module):
         # T x B x C x W x H
         # batched_code_sequence = torch.tensor((len(x), len(x[0]), 512, 4, 8))
         y = []
+        # todo can be executed in parallel
         for i, batched_samples in enumerate(x):
             # only keep indices of last batch of samples,
             # the frame for which we have ground truth
             encoded, unpool_indices, unpool_sizes = self.encoder(batched_samples)
-            print("Encoded size:", encoded.size())
+            if self.v: print("Encoded size:", encoded.size())
             # batched_code_sequence[i] = encoded
             y.append(encoded)
         batched_code_sequence = torch.stack(y, dim=1)
@@ -49,19 +52,24 @@ class SegnetConvLSTM(nn.Module):
         # now feed the batched output of the encoder to the lstm
         # (prefer batch_first format)
         # batched_code_sequence.permute(1, 0, 2, 3, 4)
-        print("Batched sequence of codes size:", batched_code_sequence.size())
+        if self.v: print("Batched sequence of codes size:", batched_code_sequence.size())
 
         # ditch the output, keep the last hidden state produced at
         # step n of latest layer m
         _, last_state = self.lstm(batched_code_sequence)
         last_state = last_state[0][0]   # ignore cell state C result
-        print("Latest hidden state size:", last_state.size())
+        if self.v: print("Latest hidden state size:", last_state.size())
 
         # now decode the hidden representation
         decoded = self.decoder(last_state, unpool_indices, unpool_sizes)
 
         # return a probability map of the same size of each frame input to the model
-        return torch.softmax(decoded)
+        if self.n_classes == 1:
+            return decoded  # sigmoid is applied inside loss for efficiency
+        else:
+            # the sum over all channels will be one for each pixel
+            return torch.softmax(decoded, dim=1)
+
 
 # this won't work if not run in parent directory
 if __name__ == '__main__':
