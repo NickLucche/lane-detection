@@ -7,22 +7,29 @@ from lstm import convlstm
 from utils.data_utils import TUSimpleDataset
 from utils.data_utils import DataLoader
 from torchvision import transforms
+from utils.cuda_device import device
 
 class SegnetConvLSTM(nn.Module):
 
-    def __init__(self, lstm_nlayers:int=4, decoder_out_channels:int=1, verbose=False):
+    def __init__(self, lstm_hidden_dim:list, lstm_nlayers:int=2, decoder_out_channels:int=1,
+                 vgg_decoder_config:list=None, verbose=False):
         super(SegnetConvLSTM, self).__init__()
+        assert lstm_nlayers == len(lstm_hidden_dim)
+
         # most parameters are tailored to this specific dataset/use-case
         self.n_classes = decoder_out_channels
         self.v = verbose
 
         # define encoder-decoder structure
         self.encoder = encoder.VGGencoder()
-        self.decoder = decoder.VGGDecoder(decoder_out_channels)
+        self.decoder = decoder.VGGDecoder(decoder_out_channels, config=vgg_decoder_config)
+        # self.encoder.to(device)
+        # self.decoder.to(device)
 
         # define ConvLSTM block
-        self.lstm = convlstm.ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=512,
+        self.lstm = convlstm.ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=lstm_hidden_dim,
                                       kernel_size=(3, 3), num_layers=lstm_nlayers, batch_first=True)
+        # self.lstm.to(device)
 
 
     def forward(self, x:list):

@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class VGGDecoder(nn.Module):
-    vgg_16_config = [64, 128, 256, 512, 512]
+    vgg_16_config = [512, 512, 256, 128, 64]
 
-    def __init__(self, output_channels, verbose=False):
+    def __init__(self, output_channels, config=None, verbose=False):
         """
         Instantiate the decoder needed to build the segnet model.
         :param output_channels: number of channels the output needs
@@ -18,7 +18,9 @@ class VGGDecoder(nn.Module):
         # self.decoder = utils.VGG16utils.make_decoder_layers(batch_norm=batch_norm)
         self.decoder = nn.ModuleList()
         vgg16_decoder_blocks = (3, 3, 3, 2, 2)
-        config = VGGDecoder.vgg_16_config[::-1] + [output_channels]
+        if config is None:
+            config = VGGDecoder.vgg_16_config
+        config = config + [output_channels]  # config[::-1]
 
         for i, n_blocks in enumerate(vgg16_decoder_blocks):
             self.decoder.append(Decoder_block(n_blocks, config[i], config[i+1]))

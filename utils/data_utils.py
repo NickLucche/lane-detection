@@ -89,8 +89,8 @@ class TUSimpleDataset(Dataset):
         height = label['h_samples']
         target_ = self.get_target(lanes, height, frames[0].shape)  # all samples are assumed to be of same shape
         if self.transform:
-            frames = [self.transform(F.to_pil_image(sample)).to(device) for sample in frames]
-            target_ = self.transform(F.to_pil_image(target_)).to(device)
+            frames = [self.transform(F.to_pil_image(sample)) for sample in frames]
+            target_ = self.transform(F.to_pil_image(target_))
 
         return frames, target_
 

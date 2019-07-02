@@ -1,7 +1,7 @@
 import torch.nn as nn
 from torch.autograd import Variable
 import torch
-
+from utils.cuda_device import device
 
 class ConvLSTMCell(nn.Module):
 
@@ -34,7 +34,7 @@ class ConvLSTMCell(nn.Module):
         self.bias = bias
 
         self.conv = nn.Conv2d(in_channels=self.input_dim + self.hidden_dim,
-                              out_channels=4 * self.hidden_dim,
+                              out_channels=4 * self.hidden_dim,    # one 'hidden-dim block of channels' per-gate
                               kernel_size=self.kernel_size,
                               padding=self.padding,
                               bias=self.bias)
@@ -56,8 +56,8 @@ class ConvLSTMCell(nn.Module):
         return h_next, c_next
 
     def init_hidden(self, batch_size):
-        return (Variable(torch.zeros(batch_size, self.hidden_dim, self.row, self.col)),#.cuda(),
-                Variable(torch.zeros(batch_size, self.hidden_dim, self.row, self.col)))#.cuda())
+        return (Variable(torch.zeros(batch_size, self.hidden_dim, self.row, self.col)).to(device),
+                Variable(torch.zeros(batch_size, self.hidden_dim, self.row, self.col)).to(device))
 
 
 class ConvLSTM(nn.Module):

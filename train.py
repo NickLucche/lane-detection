@@ -10,15 +10,16 @@ import utils.train_utils as trainu
 from torchvision import transforms
 from segnet_conv_lstm_model import SegnetConvLSTM
 from utils import config
+import json
 
 def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, epoch, log_every=1):
-    batch_time = AverageMeter('Time', ':6.3f')
+    batch_time = AverageMeter('BatchTime', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    acc = AverageMeter('Acc', ':6.2f')
-    f1 = AverageMeter('F1', ':6.2f')
-    prec = AverageMeter('Prec', ':6.2f')
-    rec = AverageMeter('Recall', ':6.2f')
+    acc = AverageMeter('Acc', ':6.4f')
+    f1 = AverageMeter('F1', ':6.4f')
+    prec = AverageMeter('Prec', ':6.4f')
+    rec = AverageMeter('Recall', ':6.4f')
     progress = ProgressMeter(
         len(train_loader),
         [batch_time, data_time, losses, acc, f1, prec, rec],
@@ -42,16 +43,17 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
 
         # loss executes Sigmoid inside (efficiently)
         loss = criterion(output, batched_targets)
-        print("Train loss value:",loss.item())
+        # print("Train loss value:",loss.item())
         # record loss, dividing by sample size
         losses.update(loss.item(), batched_targets.size(0))
 
         batched_targets = batched_targets.float()
         acc.update(pixel_accuracy(output, batched_targets), batched_targets.size(0))
         f, (p, r) = f1_score(output, batched_targets)
-        f1.update(f, batched_targets.size(0))
-        prec.update(p, batched_targets.size(0))
-        rec.update(r, batched_targets.size(0))
+
+        f1.update(f)
+        prec.update(p)
+        rec.update(r)
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
@@ -63,6 +65,8 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
         end = time.time()
 
         if batch_no % log_every == 0:
+            print("Base acc:{} - base prec: {}- base recall: {}- base f1: {}".
+                  format(pixel_accuracy(output, batched_targets), p, r, f))
             progress.display(batch_no)
 
     return losses.avg
@@ -71,10 +75,10 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
 def validate(val_loader, model, criterion, log_every=1):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
-    acc = AverageMeter('Acc', ':6.2f')
-    f1 = AverageMeter('F1', ':6.2f')
-    prec = AverageMeter('Prec', ':6.2f')
-    rec = AverageMeter('Recall', ':6.2f')
+    acc = AverageMeter('Acc', ':6.4f')
+    f1 = AverageMeter('F1', ':6.4f')
+    prec = AverageMeter('Prec', ':6.4f')
+    rec = AverageMeter('Recall', ':6.4f')
     progress = ProgressMeter(
         len(val_loader),
         [batch_time, losses, acc, f1, prec, rec],
@@ -100,10 +104,10 @@ def validate(val_loader, model, criterion, log_every=1):
             # store various accuracy measures
             acc.update(pixel_accuracy(output, batched_targets), batched_targets.size(0))
             f, (p, r) = f1_score(output, batched_targets)
-            f1.update(f, batched_targets.size(0))
-            prec.update(p, batched_targets.size(0))
-            rec.update(r, batched_targets.size(0))
 
+            f1.update(f)
+            prec.update(p)
+            rec.update(r)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -163,47 +167,60 @@ def adjust_learning_rate(optimizer, epoch, init_lr):
         param_group['lr'] = lr
 
 # hyperparameters
-epochs = 30
-init_lr = 0.01
-batch_size = 5
-workers = 4
-momentum = 0.9
-weight_decay = 0.0001
+cc = config.Configs()
+epochs = cc.epochs
+init_lr = cc.init_lr
+batch_size = cc.batch_size
+workers = cc.workers
+momentum = cc.momentum
+weight_decay = cc.weight_decay
+hidden_dims = cc.hidden_dims
+decoder_config = cc.decoder_config
 
-
+# **DATA**
 data_transform = transforms.Compose([
     transforms.Resize((128, 256)),
     # transforms.RandomHorizontalFlip(), #need to apply flip to all samples and target too
     transforms.ToTensor(),
 ])
-tu_tr_dataset = TUSimpleDataset(config.tr_root, config.tr_subdirs, config.tr_flabels, transforms=data_transform, shuffle_seed=9)
-tu_test_dataset = TUSimpleDataset(config.ts_root, config.ts_subdirs, config.ts_flabels, transforms=data_transform, shuffle_seed=9)
+tu_tr_dataset = TUSimpleDataset(config.tr_root, config.tr_subdirs, config.tr_flabels, transforms=data_transform)#, shuffle_seed=9)
+tu_test_dataset = TUSimpleDataset(config.ts_root, config.ts_subdirs, config.ts_flabels, transforms=data_transform)#, shuffle_seed=9)
 
 # build data loader
 tu_train_dataloader = DataLoader(tu_tr_dataset, batch_size=batch_size, shuffle=True, num_workers=4)
-tu_test_dataloader = DataLoader(tu_test_dataset, batch_size=12, shuffle=True, num_workers=4)
+tu_test_dataloader = DataLoader(tu_test_dataset, batch_size=cc.test_batch, shuffle=True, num_workers=4)
 
-# model, output size must have dimension (B, C..), where C = number of classes
-model = SegnetConvLSTM(decoder_out_channels=1)
+
+# **MODEL**
+# output size must have dimension (B, C..), where C = number of classes
+model = SegnetConvLSTM(hidden_dims, decoder_out_channels=1, lstm_nlayers=3, vgg_decoder_config=decoder_config)
 model.to(device)
 
 # define loss function (criterion) and optimizer
 # loss function is a binary crossentropy evaluated pixel-wise
 # criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([.4, 1.])).to(device) # using crossentropy for weighted loss
-criterion = nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([3.])).to(device)
-# todo try BCEWithLogits and pos_weight loss, changing output channels to 1
+criterion = nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([4.])).to(device)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr, momentum=momentum, weight_decay=weight_decay)
-optimizer = torch.optim.Adam(model.parameters(), init_lr)
+optimizer = torch.optim.Adam(model.parameters(), init_lr, weight_decay=weight_decay)
 
+losses_ = []
+test_losses = []
 optimizer.zero_grad()
 for epoch in range(epochs):
-    adjust_learning_rate(optimizer, epoch, init_lr)
+    #adjust_learning_rate(optimizer, epoch, init_lr)
 
     # do one train step
-    loss_val = train(tu_train_dataloader, model, criterion, optimizer, epoch)
-
+    loss_val = train(tu_train_dataloader, model, criterion, optimizer, epoch, log_every=16)
+    losses_.append(loss_val)
     # evaluate model performance
-    loss_eval_val = validate(tu_test_dataloader, model, criterion)
+    loss_eval_val = validate(tu_test_dataloader, model, criterion, log_every=24)
+    test_losses.append(loss_eval_val)
+    if epoch % 2 == 0:
+        trainu.save_model_checkpoint(model, 'model-epoch-{}.pt'.format(epoch), epoch=epoch, tr_loss=loss_val,
+                                     ev_loss=loss_eval_val)
 
-    trainu.save_model_checkpoint(model, 'model.pt', epoch=epoch, tr_loss=loss_val, ev_loss=loss_eval_val)
+print("Saving loss values to json..")
+with open('tr-losses.json', 'w') as f, open('test-losses.json', 'w') as ff:
+    json.dump(losses_, f)
+    json.dump(test_losses, ff)
