@@ -63,7 +63,6 @@ def load_model_checkpoint(model:torch.nn.Module, filename:str, inference:bool,
     :return:
     """
     checkpoint = torch.load(filename)
-    model.load_state_dict(checkpoint['model_state_dict'])
 
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
@@ -74,7 +73,7 @@ def load_model_checkpoint(model:torch.nn.Module, filename:str, inference:bool,
         model.eval()
     else:
         model.train()
-    return checkpoint
+    return model.load_state_dict(checkpoint['model_state_dict'])
 
 
 def loss_weight_balance(labels:list):

@@ -1,8 +1,15 @@
 import torch
 from segnet import vgg_16_encoder, vgg16_decoder
 from lstm import convlstm
+from utils import train_utils as tu
+from segnet_conv_lstm_model import SegnetConvLSTM
+from utils.config import Configs
 
 if __name__ == '__main__':
+
+    model = SegnetConvLSTM(hidden_dims, decoder_out_channels=1, lstm_nlayers=3, vgg_decoder_config=decoder_config)
+    model = tu.load_model_checkpoint()
+
     with torch.no_grad():
         # seq of images
         enc_image_seq = torch.zeros((3, 512, 4, 8))

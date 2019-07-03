@@ -2,7 +2,6 @@ from torchvision import datasets
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from skimage import io
 import os
 import json
 import random
@@ -11,6 +10,7 @@ import cv2
 import matplotlib.pyplot as plt
 from utils.cuda_device import device
 import torchvision.transforms.functional as F
+import torch
 
 
 class TUSimpleDataset(Dataset):
@@ -75,7 +75,7 @@ class TUSimpleDataset(Dataset):
         for img_name in range(1, 21)[-self.n_frames:]:
             img_name = str(img_name) + ".jpg"
             # print("Loading", os.path.join(images_dir, img_name))
-            frames.append(io.imread(os.path.join(images_dir, img_name)).astype(np.uint8))
+            frames.append(cv2.imread(os.path.join(images_dir, img_name)))
 
         label_key = self.sample_folders[idx]
         label = self.labels[label_key]
@@ -84,27 +84,35 @@ class TUSimpleDataset(Dataset):
         # print("Subfolder key:",label_key)
         # print("Full folder:", images_dir)
         # print("Target:", label['raw_file'])
-
         lanes = label['lanes']
         height = label['h_samples']
-        target_ = self.get_target(lanes, height, frames[0].shape)  # all samples are assumed to be of same shape
-        if self.transform:
-            frames = [self.transform(F.to_pil_image(sample)) for sample in frames]
-            target_ = self.transform(F.to_pil_image(target_))
+        target_ = self.get_scaled_target(lanes, height, frames[0].shape)  # all samples are assumed to be of same shape
+
+        # apply transformations
+        target_ = self.to_tensor(target_)
+        frames = [self.to_tensor(self.resize(f)/255.) for f in frames] # also normalize
+
+        # if self.transform:
+        #     frames = [self.transform(F.to_pil_image(sample)) for sample in frames]  # already normalized by PIL function
+        #     target_ = (self.transform(F.to_pil_image(target_)) > .5).float()
 
         return frames, target_
 
-
-    def get_target(self, lanes:list, heights:list, shape:tuple, normalized:bool=True):
+    def get_scaled_target(self, lanes:list, heights:list, original_shape:tuple, new_dim=(128, 256, 1)):
         gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, heights) if x >= 0] for lane in lanes]
         # target is a probability map
-        image = np.zeros((shape[0], shape[1], 1))
-        # return 0-1 normalized image
-        c = (255, 255, 255) if not normalized else (1, 1, 1)
+        image = np.zeros(new_dim).astype(np.float32)
+        c = (1., 1., 1.)   # white lane points (normalized)
+        # c = (255, 255, 255)
+        scale_factorX = new_dim[0] * (1./original_shape[0])
+        scale_factorY = new_dim[1] * (1./original_shape[1])
         for lane in gt_lanes_vis:
-            cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=5)
+            # rescale lane points
+            lane = [(x*scale_factorX, y*scale_factorY) for (x, y) in lane]
+            cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=3)   # todo original value=5 for full size
+        # print(image.shape, image.max(), image.astype(np.uint8).mean(), image.sum())
 
-        return image.astype(np.uint8)
+        return image.astype(np.float32)
 
     def get_clip_id(self, filename:str):
         # clip unique id is made of dataset subfolder+clip_folder
@@ -116,7 +124,15 @@ class TUSimpleDataset(Dataset):
             # sample absolute path was passed
             pass
 
+    def resize(self, image, new_dim=(256, 128)):
+        return cv2.resize(image, new_dim).astype(np.float32)
 
+
+    def to_tensor(self, image):
+        # swap color axis because (assumed image has 3 channels)
+        # numpy image: H x W x C
+        # torch image: C X H X W
+        return torch.from_numpy(image.transpose((2, 0, 1)))
 
 # :param eval_seed: Evaluation set is chosen among the many samples by means of a randomly init bit-mask,
 #                           so that no bias comes from data ordering.
@@ -127,6 +143,7 @@ def show_plain_images(images, n_frames):
     for i in range(n_frames):
         ax = plt.subplot(1, n_frames, i + 1)
         if images[i].shape[0] > 1:
+            # print(images[i].size())
             ax.imshow(images[i].permute(1, 2, 0).numpy())
         else:
             ax.imshow(images[i].squeeze().numpy(), cmap='gray')
@@ -147,7 +164,7 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
     """
     gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, gt_hsamples) if x >= 0] for lane in gt_lanes]
     if gt_frame_filename:
-        image = io.imread(gt_frame_filename)
+        image = cv2.imread(gt_frame_filename)
         c = (0, 255, 0)
     else:
         c = (255, 255, 255)
@@ -186,25 +203,38 @@ if __name__ == '__main__':
     tu_dataloader = DataLoader(tu_dataset, batch_size=2, shuffle=True, num_workers=2)
     # ([input_tensor_1, input_tensor_2], label_tensor) -> (
     # [batched_input_tensor_1, batched_input_tensor_2], batched_label_tensor)
-    tu_test_dataset =  TUSimpleDataset(root.replace('train_set', 'test_set'), ['0601', '0531', '0530'], ['/Users/nick/Desktop/test_set/test_labels.json'], transforms=data_transform)
+    tu_test_dataset = TUSimpleDataset(root.replace('train_set', 'test_set'), ['0601', '0531', '0530'], ['/Users/nick/Desktop/test_set/test_labels.json'], transforms=data_transform)
 
-    for i, (frames, target) in enumerate(tu_test_dataset):
-        print("test set length:", len(tu_dataset))
-        print("Sizes:", frames[0].size(), target.size())
-        # print("N-samples", len(samples))
-
-        # resize to original image size (needed for TuSimple evaluation)
-        target = transforms.Resize((720, 1280))(F.to_pil_image(target))
-        target = transforms.ToTensor()(target)
-        show_plain_images(frames + [target], len(frames) + 1)
+    # for i, (frames, target) in enumerate(tu_test_dataset):
+    #     print("test set length:", len(tu_dataset))
+    #     print("Sizes:", frames[0].size(), target.size())
+    #     # print("N-samples", len(samples))
+    #
+    #     # resize to original image size (needed for TuSimple evaluation)
+    #     target = transforms.Resize((720, 1280))(F.to_pil_image(target))
+    #     target = transforms.ToTensor()(target)
+    #     show_plain_images(frames + [target], len(frames) + 1)
 
 
     for i, (batched_samples, batched_target) in enumerate(tu_dataloader):
+        # print(len(batched_samples))
+        print("TARGET:",torch.max(batched_target), torch.sum(batched_target))
+        # print(batched_samples[0].size(), batched_target.size())
+        for i in range(2):
+            samples = []
+            for j in range(len(batched_samples)):
+                a, b = torch.chunk(batched_samples[j], 2, dim=0)
+                if i==0:
+                    samples.append(a.squeeze())
+                else:
+                    samples.append(b.squeeze())
+                print("samples info")
+                print(a.squeeze().size())
+                print(torch.max(a), torch.mean(a), torch.sum(a))
 
-        print(batched_samples[0].size(), batched_target.size())
-        break
+            print("Single target shape:", batched_target[i].size())
+            show_plain_images(samples + [batched_target[i]], len(samples) + 1)
         # here result is a tensor, with channel first format
         # samples, target = tu_dataset[i]
-        print("Sizes:", samples[0].size(), target.size())
+        # print("Sizes:", samples[0].size(), target.size())
         # print("N-samples", len(samples))
-        show_plain_images(samples + [target], len(samples) + 1)

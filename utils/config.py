@@ -29,6 +29,7 @@ class Configs:
         self.weight_decay = 0.0001
 
         # convlstm hidden dim
-        self.hidden_dims = [64, 128, 512]
+        # self.hidden_dims = [64, 128, 512]
+        self.hidden_dims = [512, 512, 512]
         # vgg 16 decoder config
         self.decoder_config = [512, 512, 256, 128, 64]
