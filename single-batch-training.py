@@ -7,13 +7,13 @@ from utils.data_utils import TUSimpleDataset
 from utils.data_utils import DataLoader
 from utils.cuda_device import device
 import utils.train_utils as trainu
+from torchvision import transforms
 from segnet_conv_lstm_model import SegnetConvLSTM
 from utils import config
 import json
-import cv2
 
 
-def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, epoch, log_every=1):
+def train(list_batched_samples, batched_targets, model:SegnetConvLSTM, criterion, optimizer, epoch, log_every=1):
     batch_time = AverageMeter('BatchTime', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -22,7 +22,7 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
     prec = AverageMeter('Prec', ':6.4f')
     rec = AverageMeter('Recall', ':6.4f')
     progress = ProgressMeter(
-        len(train_loader),
+        1,
         [batch_time, data_time, losses, acc, f1, prec, rec],
         prefix="Epoch: [{}]".format(epoch))
 
@@ -30,56 +30,52 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
     model.train()
 
     end = time.time()
-    for batch_no, (list_batched_samples, batched_targets) in enumerate(train_loader):
-        # measure data loading time
-        data_time.update(time.time() - end)
 
-        # move data to gpu (or cpu if device is unavailable)
-        list_batched_samples = [t.to(device) for t in list_batched_samples]
-        batched_targets = batched_targets.long().to(device)
-        # squeeze target channels to compute loss
-        batched_targets = batched_targets.squeeze(1)
+    # measure data loading time
+    data_time.update(time.time() - end)
 
-        # compute output
-        output = model(list_batched_samples)
-        # print("Output size:", output.size(), "Target size:", batched_targets.size())
+    # move data to gpu (or cpu if device is unavailable)
+    list_batched_samples = [t.to(device) for t in list_batched_samples]
+    batched_targets = batched_targets.to(device)
 
-        # loss executes Sigmoid inside (efficiently)
-        loss = criterion(output, batched_targets)
-        # print("Train loss value:",loss.item())
+    # compute output
+    output = model(list_batched_samples)
+    # print("Output size:", output.size(), "Target size:", batched_targets.size())
 
-        # compute gradient and do SGD step
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+    # loss executes Sigmoid inside (efficiently)
+    loss = criterion(output, batched_targets)
 
-        # detach output to compute metrics without storing computational graph
-        output = output.detach()
-        # record loss, dividing by sample size
-        losses.update(loss.item(), batched_targets.size(0))
+    # compute gradient and do SGD step
+    optimizer.zero_grad()
+    loss.backward()
+    optimizer.step()
+    output = output.detach()
+    # print("Train loss value:",loss.item())
+    # record loss, dividing by sample size
+    losses.update(loss.item(), batched_targets.size(0))
 
-        batched_targets = batched_targets.float()
-        accuracy = pixel_accuracy(output, batched_targets)
-        acc.update(accuracy, batched_targets.size(0))
-        f, (p, r) = f1_score(output, batched_targets)
+    batched_targets = batched_targets.float()
+    acc.update(pixel_accuracy(output, batched_targets), batched_targets.size(0))
+    f, (p, r) = f1_score(output, batched_targets)
 
-        f1.update(f)
-        prec.update(p)
-        rec.update(r)
+    f1.update(f)
+    prec.update(p)
+    rec.update(r)
 
-        # measure elapsed time
-        batch_time.update(time.time() - end)
-        end = time.time()
 
-        if batch_no % log_every == 0:
-            print("Output min", output.min().item(), "Output sum:", output.sum().item(), "Output max:", torch.max(output).item())
-            print("Targets sum:", batched_targets.sum())#, "Targets max:", torch.max(batched_targets))
-            print("Base acc:{} - base prec: {}- base recall: {}- base f1: {}".
-                  format(pixel_accuracy(output, batched_targets), p, r, f))
-            progress.display(batch_no)
 
-        # torch.cuda.empty_cache()
-    return losses.avg, acc.avg, f1.avg
+    # measure elapsed time
+    batch_time.update(time.time() - end)
+    end = time.time()
+
+
+    print("Output sum:", output.sum().item(), "Output max:", torch.max(output).item())
+    print("Targets sum:", batched_targets.sum(), "Targets max:", torch.max(batched_targets))
+    print("Base acc:{} - base prec: {}- base recall: {}- base f1: {}".
+              format(pixel_accuracy(output, batched_targets), p, r, f))
+    progress.display(1)
+
+    return losses.avg
 
 
 def validate(val_loader, model, criterion, log_every=1):
@@ -148,7 +144,6 @@ def IoU_accuracy(prediction, target):
 
     return np.sum(intersection) / np.sum(union)
 
-
 def pixel_accuracy(prediction:torch.Tensor, target:torch.Tensor):
     """
         Computes simple pixel-wise accuracy measure
@@ -158,34 +153,28 @@ def pixel_accuracy(prediction:torch.Tensor, target:torch.Tensor):
         there's a huge unbalance between 2 classes
         (background and lanes pixels).
     """
-    # get prediction positive channel (lanes)
-    out = (prediction[:, 1, :, :] > 0.).float()
-    return (out == target).float().mean().item()
-
+    output = (prediction > 0.5).float()
+    return (output == target).float().mean()
 
 def f1_score(output, target, epsilon=1e-7):
-    # output has to be passed though sigmoid and then thresholded
-    # this way we directly threshold it
-    probas = (output[:, 1, :, :] > 0.).float()
-
-    # apply dilation
-    # kernel = np.uint8(np.ones((3, 3)))
-    # target = cv2.dilate(target, kernel)
-    # probas = cv2.dilate(probas, kernel)
-
-    TP = (probas * target).sum(dim=1)
-    precision = TP / (probas.sum(dim=1) + epsilon)
-    recall = TP / (target.sum(dim=1) + epsilon)
+    # sigmoid is executed inside loss
+    probas = (output > 0.).float()
+    # probas = probas.squeeze(1)
+    # target = target.squeeze(1)
+    TP = (probas * target).sum(dim=0)
+    print("True positives", TP.size())
+    precision = TP / (probas.sum(dim=0) + epsilon)
+    recall = TP / (target.sum(dim=0) + epsilon)
+    print("Precision", precision.size())
     f1 = 2 * precision * recall / (precision + recall + epsilon)
-    f1 = f1.clamp(min=epsilon, max=1-epsilon)
-    return f1.mean().item(), (precision.mean().item(), recall.mean().item())
+    f1 = f1.clamp(min=epsilon, max=1 - epsilon)
+    return f1.mean(), (precision.mean(), recall.mean())
 
 def adjust_learning_rate(optimizer, epoch, init_lr):
     """Sets the learning rate to the initial LR decayed by 10 every 10 epochs"""
     lr = init_lr * (0.1 ** (epoch // 10))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
-
 
 # hyperparameters
 cc = config.Configs()
@@ -204,45 +193,40 @@ tu_tr_dataset = TUSimpleDataset(config.tr_root, config.tr_subdirs, config.tr_fla
 # tu_test_dataset = TUSimpleDataset(config.ts_root, config.ts_subdirs, config.ts_flabels, shuffle=False)#, shuffle_seed=9)
 
 # build data loader
-tu_train_dataloader = DataLoader(tu_tr_dataset, batch_size=batch_size, shuffle=True, num_workers=workers)
+tu_train_dataloader = DataLoader(tu_tr_dataset, batch_size=batch_size, shuffle=False, num_workers=4)
 # tu_test_dataloader = DataLoader(tu_test_dataset, batch_size=cc.test_batch, shuffle=False, num_workers=4)
 
 
 # **MODEL**
 # output size must have dimension (B, C..), where C = number of classes
-model = SegnetConvLSTM(hidden_dims, decoder_out_channels=2, lstm_nlayers=len(hidden_dims), vgg_decoder_config=decoder_config)
+model = SegnetConvLSTM(hidden_dims, decoder_out_channels=1, lstm_nlayers=3, vgg_decoder_config=decoder_config)
 model.to(device)
 
 # define loss function (criterion) and optimizer
 # loss function is a binary crossentropy evaluated pixel-wise
-criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.02, 1.02])).to(device) # using crossentropy for weighted loss
-# criterion = nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([17.])).to(device)
+# criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([.4, 1.])).to(device) # using crossentropy for weighted loss
+criterion = nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([4.])).to(device)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr, momentum=momentum, weight_decay=weight_decay)
-optimizer = torch.optim.Adam(model.parameters(), init_lr)#, weight_decay=weight_decay)
+optimizer = torch.optim.Adam(model.parameters(), init_lr, weight_decay=weight_decay)
 
 losses_ = []
-accs = []
-f1s = []
 test_losses = []
-# optimizer.zero_grad()
+samples, targets = iter(tu_train_dataloader).next()
 for epoch in range(epochs):
     #adjust_learning_rate(optimizer, epoch, init_lr)
 
     # do one train step
-    loss_val, a, f = train(tu_train_dataloader, model, criterion, optimizer, epoch, log_every=16)
+    loss_val = train(samples, targets, model, criterion, optimizer, epoch, log_every=1)
     losses_.append(loss_val)
-    accs.append(a)
-    f1s.append(f)
     # evaluate model performance
     #loss_eval_val = validate(tu_test_dataloader, model, criterion, log_every=24)
     #test_losses.append(loss_eval_val)
-
-    # save model at each epoch (overwrite model because of memory usage)
-    trainu.save_model_checkpoint(model, 'model.torch', epoch=epoch)
+    if epoch % 2 == 0:
+        trainu.save_model_checkpoint(model, 'model-epoch-{}.pt'.format(epoch), epoch=epoch, tr_loss=loss_val,
+                                     ev_loss=1.)
 
 print("Saving loss values to json..")
-with open('tr-losses.json', 'w') as f, open('tr-acc.json', 'w') as ff, open('tr-f1score.json', 'w') as fff:
+with open('tr-losses.json', 'w') as f, open('test-losses.json', 'w') as ff:
     json.dump(losses_, f)
-    json.dump(accs, ff)
-    json.dump(f1s, fff)
+    json.dump(test_losses, ff)

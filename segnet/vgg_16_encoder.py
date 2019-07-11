@@ -34,6 +34,7 @@ class VGGencoder(nn.Module):
         else:
             print("Instantiating simple Segnet encoder (VGG16)")
             self.encoder = nn.Sequential(*self.vgg16.features)
+            raise NotImplementedError()
             # print(self.encoder)
 
     def forward(self, input:torch.Tensor):

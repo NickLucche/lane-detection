@@ -23,7 +23,7 @@ class VGGDecoder(nn.Module):
         config = config + [output_channels]  # config[::-1]
 
         for i, n_blocks in enumerate(vgg16_decoder_blocks):
-            self.decoder.append(Decoder_block(n_blocks, config[i], config[i+1]))
+            self.decoder.append(Decoder_block(n_blocks, config[i], config[i+1], i==(len(vgg16_decoder_blocks)-1)))
 
 
         self.verbose = verbose
@@ -45,7 +45,7 @@ class VGGDecoder(nn.Module):
 
 class Decoder_block(nn.Module):
     # each decoder block starts with a max unpool operation
-    def __init__(self, n_blocks, in_channels, out_channels):
+    def __init__(self, n_blocks, in_channels, out_channels, last=False):
         super(Decoder_block, self).__init__()
         layers = []
         block = [nn.Conv2d(in_channels, in_channels, kernel_size=3, padding=1, stride=1),
@@ -55,10 +55,15 @@ class Decoder_block(nn.Module):
         for i in range(n_blocks-1):
             layers += block
 
-        # last layer has to convolve to the dimension of the next block
-        layers += [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=1),
-                  nn.BatchNorm2d(out_channels),
-                  nn.ReLU(inplace=True)]
+        # last layer has to convolve to the dimension of the next block and the very final
+        # convolution is performed without ReLU application (helps in differentiating the 2
+        # classes before applying softmax)
+        if last:
+            layers += [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=1)]
+        else:
+            layers += [nn.Conv2d(in_channels, out_channels, kernel_size=3, padding=1, stride=1),
+                   nn.BatchNorm2d(out_channels),
+                   nn.ReLU(inplace=True)]
 
         self.decoder_block = nn.Sequential(*layers)
 

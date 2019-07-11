@@ -20,9 +20,9 @@ class Configs:
 
     def __init__(self):
         # hyperparameters
-        self.epochs = 15
-        self.init_lr = 0.1
-        self.batch_size = 6
+        self.epochs = 30
+        self.init_lr = 0.001
+        self.batch_size = 7
         self.test_batch = 32
         self.workers = 4
         self.momentum = 0.9
@@ -30,6 +30,6 @@ class Configs:
 
         # convlstm hidden dim
         # self.hidden_dims = [64, 128, 512]
-        self.hidden_dims = [512, 512, 512]
+        self.hidden_dims = [512, 512]
         # vgg 16 decoder config
         self.decoder_config = [512, 512, 256, 128, 64]

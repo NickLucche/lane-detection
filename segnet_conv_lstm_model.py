@@ -9,6 +9,7 @@ from utils.data_utils import DataLoader
 from torchvision import transforms
 from utils.cuda_device import device
 
+
 class SegnetConvLSTM(nn.Module):
 
     def __init__(self, lstm_hidden_dim:list, lstm_nlayers:int=2, decoder_out_channels:int=1,
@@ -23,14 +24,10 @@ class SegnetConvLSTM(nn.Module):
         # define encoder-decoder structure
         self.encoder = encoder.VGGencoder()
         self.decoder = decoder.VGGDecoder(decoder_out_channels, config=vgg_decoder_config)
-        # self.encoder.to(device)
-        # self.decoder.to(device)
 
         # define ConvLSTM block
         self.lstm = convlstm.ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=lstm_hidden_dim,
                                       kernel_size=(3, 3), num_layers=lstm_nlayers, batch_first=True)
-        # self.lstm.to(device)
-
 
     def forward(self, x:list):
         """
@@ -38,7 +35,7 @@ class SegnetConvLSTM(nn.Module):
         input to be in the format of a list of
         batched samples, 1 for each timestep/frame,
         which is then stacked to form a single input to
-        feed to the lstm. Batch are assumed to be of equal constant size.
+        feed to the lstm. Batches are assumed to be of equal constant size.
         :param x: list of batched samples; len(x)=n_frames=seq_len
         :return: output of the model, a probability map telling
                 whether pixel i, j is a lane or not.
@@ -61,21 +58,18 @@ class SegnetConvLSTM(nn.Module):
         # batched_code_sequence.permute(1, 0, 2, 3, 4)
         if self.v: print("Batched sequence of codes size:", batched_code_sequence.size())
 
-        # ditch the output, keep the last hidden state produced at
-        # step n of latest layer m
-        _, last_state = self.lstm(batched_code_sequence)
-        last_state = last_state[0][0]   # ignore cell state C result
-        if self.v: print("Latest hidden state size:", last_state.size())
+        # keep last output
+        # _, last_state = self.lstm(batched_code_sequence)
+        output, _ = self.lstm(batched_code_sequence)
+        output = output[0][:, -1, :, :, :]  # batch size must be first!
+        # last_state = last_state[0][0]   # ignore cell state C result
+        if self.v: print("LSTM output size:", output.size())
 
         # now decode the hidden representation
-        decoded = self.decoder(last_state, unpool_indices, unpool_sizes)
+        decoded = self.decoder(output, unpool_indices, unpool_sizes)
 
         # return a probability map of the same size of each frame input to the model
-        if self.n_classes == 1:
-            return decoded  # sigmoid is applied inside loss for efficiency
-        else:
-            # the sum over all channels will be one for each pixel
-            return torch.softmax(decoded, dim=1)
+        return decoded  # (NOTE: softmax is applied inside loss for efficiency)
 
 
 # this won't work if not run in parent directory

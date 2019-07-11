@@ -47,13 +47,14 @@ def save_model_checkpoint(model:torch.nn.Module, filename:str, optimizer:torch.o
     torch.save({
         'epoch': epoch,
         'model_state_dict': model.state_dict(),
-        'optimizer_state_dict': optimizer.state_dict() if optimizer is not None else None,
-        'tr_loss': tr_loss,
-        'ev_loss': ev_loss
+        # 'optimizer_state_dict': optimizer.state_dict() if optimizer is not None else None,
+        # 'tr_loss': tr_loss,
+        # 'ev_loss': ev_loss
     }, filename)
 
+
 def load_model_checkpoint(model:torch.nn.Module, filename:str, inference:bool,
-                          optimizer:torch.optim=None):
+                          map_location=None, optimizer:torch.optim=None):
     """
     Load a model checkpoint
     :param model:
@@ -62,7 +63,7 @@ def load_model_checkpoint(model:torch.nn.Module, filename:str, inference:bool,
     :param optimizer:
     :return:
     """
-    checkpoint = torch.load(filename)
+    checkpoint = torch.load(filename, map_location=map_location)
 
     if optimizer:
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])

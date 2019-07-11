@@ -3,6 +3,7 @@ from torch.autograd import Variable
 import torch
 from utils.cuda_device import device
 
+
 class ConvLSTMCell(nn.Module):
 
     def __init__(self, input_size, input_dim, hidden_dim, kernel_size, bias):
@@ -143,7 +144,7 @@ class ConvLSTM(nn.Module):
 
         if not self.return_all_layers:
             layer_output_list = layer_output_list[-1:]
-            last_state_list = last_state_list[-1:]
+            last_state_list = last_state_list[-1:]  # simply returns last layer state as list [elem]
 
         return layer_output_list, last_state_list
 
@@ -164,19 +165,22 @@ class ConvLSTM(nn.Module):
         if not isinstance(param, list):
             param = [param] * num_layers
 
-
         return param
 
 
 if __name__ == '__main__':
     # gradient check
     with torch.no_grad():
-        convlstm = ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=512, kernel_size=(3,3), num_layers=10, batch_first=True)
+        convlstm = ConvLSTM(input_size=(4, 8), input_dim=512, hidden_dim=512, kernel_size=(3, 3), num_layers=2, batch_first=True)
         # num_layers = m in paper
 
         # b t c h w
-        fake_series = torch.zeros((1, 3, 512, 4, 8))
+        fake_series = torch.zeros((5, 3, 512, 4, 8))
         print("Input:", fake_series.size())
         output, last_state = convlstm(fake_series)
+        print("Vanilla Output length", len(output), [o.size() for o in output])
+        output = output[0][:,-1,:,:,:]
+        print("Out length", len(output), "Output shape", output.size())
+        print("Last state length:", len(last_state))
         print("Output {} ".format(last_state[0][0].size()))  # last_state contains HIDDEN_REP, CONTEXT
         # loss_fn = torch.nn.MSELoss()
