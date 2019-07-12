@@ -144,7 +144,9 @@ def show_plain_images(images, n_frames):
         ax = plt.subplot(1, n_frames, i + 1)
         if images[i].shape[0] > 1:
             # print(images[i].size())
-            ax.imshow(images[i].permute(1, 2, 0).numpy())
+            image = images[i].permute(1, 2, 0).numpy()
+            image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+            ax.imshow(image)
         else:
             ax.imshow(images[i].squeeze().numpy(), cmap='gray')
         ax.get_xaxis().set_visible(False)

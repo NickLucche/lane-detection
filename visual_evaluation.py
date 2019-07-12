@@ -15,20 +15,23 @@ if __name__ == '__main__':
 
     cc = Configs()
     print("Loading stored model")
-    model = SegnetConvLSTM(cc.hidden_dims, decoder_out_channels=1, lstm_nlayers=3, vgg_decoder_config=cc.decoder_config)
-    tu.load_model_checkpoint(model, 'model-epoch-4.pt', inference=True, map_location=device)
+    model = SegnetConvLSTM(cc.hidden_dims, decoder_out_channels=2, lstm_nlayers=len(cc.hidden_dims), vgg_decoder_config=cc.decoder_config)
+    tu.load_model_checkpoint(model, '/Volumes/Samsung128/projects/ispr-project/train-results/model.torch', inference=False, map_location=device)
     # print("Model with {} parameters correctly loaded", len(model.parameters()))
     print("Model loaded")
-    tu_test_dataset = TUSimpleDataset(config.tr_root, config.tr_subdirs, config.tr_flabels)
-    tu_dataloader = DataLoader(tu_test_dataset, batch_size=2, shuffle=False)
-
+    tu_test_dataset = TUSimpleDataset(config.ts_root, config.ts_subdirs, config.ts_flabels)
+    tu_dataloader = DataLoader(tu_test_dataset, batch_size=2, shuffle=True)
+    model.train()
     with torch.no_grad():
 
         for i, (frames, targets) in enumerate(tu_dataloader):
             output = model(frames)
-            print("Loss", nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([17.]))(output, targets))
-            output = (torch.sigmoid(output) > .5)
-            print(targets.sum().item(), output.sum().item())
+            targets_ = targets.squeeze(1).long()
+
+            print("Loss:", nn.CrossEntropyLoss(weight=torch.FloatTensor(cc.loss_weights))(output, targets_))
+            output = (torch.sigmoid(output[:, 1, :, :]) > .5).float()
+            print("Output max:", output.max().item(), "Output mean", output.mean().item())
+            print("Pixel lane points:", targets.sum().item(), output.sum().item())
             # print inputs and target
             for i in range(2):
                 samples = []
@@ -41,5 +44,6 @@ if __name__ == '__main__':
                     # print("samples info")
                     # print(a.squeeze().size())
                     # print(torch.max(a), torch.mean(a), torch.sum(a))
-                # print("Single target shape:", batched_target[i].size())
-                show_plain_images(samples + [targets[i]] + [output[i]], len(samples) + 2)
+                # print("Single target shape:", targets[i].size())
+                # print("Single output shape:", output[i][1, :, :].unsqueeze(0).size())
+                show_plain_images(samples + [targets[i]] + [output[i].unsqueeze(0)], len(samples) + 2)

@@ -11,15 +11,15 @@ class VGGencoder(nn.Module):
         # download pre-trained model with bn (batch normalization)
         # super(VGGencoder, self).__init__()
         self.segnet_ = segnet_
-        self.vgg16 = models.vgg16_bn(pretrained=pretrained)
+        vgg16 = models.vgg16_bn(pretrained=pretrained)
         # segnet implementation of vgg for efficiency,
         # max pool layers must return the indices needed for unpooling
         if segnet_:
             print("Instantiating Segnet encoder with max unpooling")
-            params = self.vgg16.features.state_dict()
+            params = vgg16.features.state_dict()
             # print(next(self.vgg16.parameters()))
             layers = []
-            for layer in self.vgg16.features.children():
+            for layer in vgg16.features.children():
                 if isinstance(layer, nn.MaxPool2d):
                     layers.append(nn.MaxPool2d(kernel_size=2, stride=2,
                                                padding=0, dilation=1, ceil_mode=False, return_indices=True))

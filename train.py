@@ -72,7 +72,7 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
         end = time.time()
 
         if batch_no % log_every == 0:
-            print("Output min", output.min().item(), "Output sum:", output.sum().item(), "Output max:", torch.max(output).item())
+            print("Output min", output.min().item(), "Output (softmax-ed) sum:", (output > 0.).float().sum().item(), "Output max:", torch.max(output).item())
             print("Targets sum:", batched_targets.sum())#, "Targets max:", torch.max(batched_targets))
             print("Base acc:{} - base prec: {}- base recall: {}- base f1: {}".
                   format(pixel_accuracy(output, batched_targets), p, r, f))
@@ -211,6 +211,10 @@ tu_train_dataloader = DataLoader(tu_tr_dataset, batch_size=batch_size, shuffle=T
 # **MODEL**
 # output size must have dimension (B, C..), where C = number of classes
 model = SegnetConvLSTM(hidden_dims, decoder_out_channels=2, lstm_nlayers=len(hidden_dims), vgg_decoder_config=decoder_config)
+if cc.load_model:
+    trainu.load_model_checkpoint(model, '../train-results/model.torch', inference=False, map_location=device)
+
+
 model.to(device)
 
 # define loss function (criterion) and optimizer
