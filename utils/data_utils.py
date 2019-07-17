@@ -9,6 +9,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 from utils.cuda_device import device
+import utils.config as config
 import torchvision.transforms.functional as F
 import torch
 
@@ -104,8 +105,8 @@ class TUSimpleDataset(Dataset):
         image = np.zeros(new_dim).astype(np.float32)
         c = (1., 1., 1.)   # white lane points (normalized)
         # c = (255, 255, 255)
-        scale_factorX = new_dim[0] * (1./original_shape[0])
-        scale_factorY = new_dim[1] * (1./original_shape[1])
+        scale_factorY = new_dim[0] * (1./original_shape[0])
+        scale_factorX = new_dim[1] * (1./original_shape[1])
         for lane in gt_lanes_vis:
             # rescale lane points
             lane = [(x*scale_factorX, y*scale_factorY) for (x, y) in lane]
@@ -134,11 +135,8 @@ class TUSimpleDataset(Dataset):
         # torch image: C X H X W
         return torch.from_numpy(image.transpose((2, 0, 1)))
 
-# :param eval_seed: Evaluation set is chosen among the many samples by means of a randomly init bit-mask,
-#                           so that no bias comes from data ordering.
 
-
-def show_plain_images(images, n_frames):
+def show_plain_images(images, n_frames, save=False, fname=None):
     plt.figure(num=None, figsize=(20, 4), dpi=80)
     for i in range(n_frames):
         ax = plt.subplot(1, n_frames, i + 1)
@@ -151,10 +149,15 @@ def show_plain_images(images, n_frames):
             ax.imshow(images[i].squeeze().numpy(), cmap='gray')
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
-    plt.show()
+    if save and fname:
+        plt.savefig(os.path.join(config.data_dir, fname), dpi=200)
+    else:
+        plt.show()
+    # plt.close()
 
 
-def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=None):
+
+def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=None, resize=True, save=False, filename=''):
     """
     Utility method for showing an annotated frame (target).
     For information on the annotation structure please refer to
@@ -165,34 +168,58 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
     :return:
     """
     gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, gt_hsamples) if x >= 0] for lane in gt_lanes]
+    if resize:
+        imageb = np.zeros((128, 256, 3))
+    else:
+        imageb = np.zeros((720, 1280, 3))
+
     if gt_frame_filename:
         image = cv2.imread(gt_frame_filename)
+        if resize:
+            image = cv2.resize(image, (256, 128))
         c = (0, 255, 0)
-    else:
-        c = (255, 255, 255)
-        image = np.zeros((720, 1280))
 
+    c = (255, 0, 0)
+
+
+    scale_factorX = 128 * (1. / 720)
+    scale_factorY = 256 * (1. / 1280)
     for lane in gt_lanes_vis:
-        cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=5)
-    # normalize image/255
-    plt.imshow(image, cmap='gray')
+        if resize:
+            lane = [(x * scale_factorY, y * scale_factorX) for (x, y) in lane]
+        cv2.polylines(imageb, np.int32([lane]), isClosed=False, color=c, thickness=5)
+        # print(imageb.shape)
+    if resize:
+        # imageb = cv2.resize(imageb, (256, 128))
+        plt.imshow(imageb.astype(np.int32))
+        plt.show()
+        # uint8 addition uses modulo (230+30=5)
+
+    image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    imageb = imageb + image
+    plt.imshow(imageb.astype(np.int32))
+    if save:
+        plt.savefig(filename, dpi=200)
     plt.show()
-    return image
+    # plt.imshow(image, cmap='gray')
+    # plt.show()
+    return imageb
 
 
 # original values: 3626 train sample - 2782 test samples
 if __name__ == '__main__':
-    # labels = [json.loads(line) for line in open('/Users/nick/Desktop/train_set/label_data_0313.json', 'r')]
-    # lanes = labels[0]['lanes']
-    # height = labels[0]['h_samples']
-    # frame = os.path.join('/Users/nick/Desktop/train_set', labels[0]['raw_file'])
-    # show_annotated_image(lanes, height)
+    labels = [json.loads(line) for line in open('/Users/nick/Desktop/train_set/label_data_0531.json', 'r')]
+    sample_no = 299
+    for sample_no in range(0, 100, 10):
+        lanes = labels[sample_no]['lanes']
+        height = labels[sample_no]['h_samples']
+        frame = os.path.join('/Users/nick/Desktop/train_set', labels[sample_no]['raw_file'])
+        show_annotated_image(lanes, height, frame, resize=False, save=True, filename=f'image_{sample_no}.png')
     root = '/Users/nick/Desktop/train_set/clips/'
     subdirs = ['0601', '0531', '0313-1', '0313-2']
     flabels = ['/Users/nick/Desktop/train_set/label_data_0601.json',
                '/Users/nick/Desktop/train_set/label_data_0531.json',
                '/Users/nick/Desktop/train_set/label_data_0313.json']
-    # toTensor will make sure channel ordering is 'pytorch-style' image = image.transpose((2, 0, 1))
 
     data_transform = transforms.Compose([
         transforms.Resize((128, 256)),
@@ -220,7 +247,7 @@ if __name__ == '__main__':
 
     for i, (batched_samples, batched_target) in enumerate(tu_dataloader):
         # print(len(batched_samples))
-        print("TARGET:",torch.max(batched_target), torch.sum(batched_target))
+        print("TARGET:", torch.max(batched_target), torch.sum(batched_target))
         # print(batched_samples[0].size(), batched_target.size())
         for i in range(2):
             samples = []
@@ -232,7 +259,7 @@ if __name__ == '__main__':
                     samples.append(b.squeeze())
                 print("samples info")
                 print(a.squeeze().size())
-                print(torch.max(a), torch.mean(a), torch.sum(a))
+                print(torch.max(a).item(), torch.mean(a).item(), torch.sum(a).item())
 
             print("Single target shape:", batched_target[i].size())
             show_plain_images(samples + [batched_target[i]], len(samples) + 1)

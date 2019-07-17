@@ -15,6 +15,7 @@ ts_root = '/Users/nick/Desktop/test_set/clips/'
 ts_subdirs = ['0601', '0531', '0530']
 ts_flabels = ['/Users/nick/Desktop/test_set/test_labels.json']
 
+data_dir = 'visual-results/'
 
 class Configs:
 

@@ -82,58 +82,6 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
     return losses.avg, acc.avg, f1.avg
 
 
-def validate(val_loader, model, criterion, log_every=1):
-    batch_time = AverageMeter('Time', ':6.3f')
-    losses = AverageMeter('Loss', ':.4e')
-    acc = AverageMeter('Acc', ':6.4f')
-    f1 = AverageMeter('F1', ':6.4f')
-    prec = AverageMeter('Prec', ':6.4f')
-    rec = AverageMeter('Recall', ':6.4f')
-    progress = ProgressMeter(
-        len(val_loader),
-        [batch_time, losses, acc, f1, prec, rec],
-        prefix='Test: ')
-
-    # switch to evaluate mode
-    model.eval()
-
-    with torch.no_grad():
-        end = time.time()
-        for batch_no, (list_batched_samples, batched_targets) in enumerate(val_loader):
-            # move data to gpu (or cpu if device is unavailable)
-            list_batched_samples = [t.to(device) for t in list_batched_samples]
-            batched_targets = batched_targets.to(device)
-
-            # compute output
-            output = model(list_batched_samples)
-
-            loss = criterion(output, batched_targets)
-
-            losses.update(loss.item(), batched_targets.size(0))
-
-            # store various accuracy measures
-            acc.update(pixel_accuracy(output, batched_targets), batched_targets.size(0))
-            f, (p, r) = f1_score(output, batched_targets)
-
-            f1.update(f)
-            prec.update(p)
-            rec.update(r)
-
-            # measure elapsed time
-            batch_time.update(time.time() - end)
-            end = time.time()
-
-            if batch_no % log_every == 0:
-                progress.display(batch_no)
-
-        # TODO: this should also be done with the ProgressMeter
-        # print(' * Acc@1 {top1.avg:.3f} Acc@5 {top5.avg:.3f}'
-        #       .format(top1=top1, top5=top5))
-
-        # currently returning loss instead of accuracy
-        return losses.avg
-
-
 def IoU_accuracy(prediction, target):
     """
         Computes the intersection over union accuracy; this measure
@@ -214,7 +162,6 @@ model = SegnetConvLSTM(hidden_dims, decoder_out_channels=2, lstm_nlayers=len(hid
 if cc.load_model:
     trainu.load_model_checkpoint(model, '../train-results/model.torch', inference=False, map_location=device)
 
-
 model.to(device)
 
 # define loss function (criterion) and optimizer
@@ -229,18 +176,17 @@ losses_ = []
 accs = []
 f1s = []
 test_losses = []
-# optimizer.zero_grad()
 for epoch in range(epochs):
-    #adjust_learning_rate(optimizer, epoch, init_lr)
+    # adjust_learning_rate(optimizer, epoch, init_lr)
 
     # do one train step
     loss_val, a, f = train(tu_train_dataloader, model, criterion, optimizer, epoch, log_every=16)
     losses_.append(loss_val)
     accs.append(a)
     f1s.append(f)
-    # evaluate model performance
-    #loss_eval_val = validate(tu_test_dataloader, model, criterion, log_every=24)
-    #test_losses.append(loss_eval_val)
+
+    # did not evaluate model performance on eval set during training since
+    # it's already expensive enough as it is
 
     # save model at each epoch (overwrite model because of memory usage)
     trainu.save_model_checkpoint(model, 'model.torch', epoch=epoch)

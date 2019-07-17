@@ -16,8 +16,6 @@ import argparse
 import time
 
 
-
-
 def validate(val_loader, model, criterion, log_every=1):
     batch_time = AverageMeter('Time', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -30,7 +28,7 @@ def validate(val_loader, model, criterion, log_every=1):
         [batch_time, losses, acc, f1, prec, rec],
         prefix='Test: ')
 
-    # switch to evaluate mode
+    # evaluate mode highly decreases performance
     model.train()
 
     correct = 0
@@ -49,7 +47,12 @@ def validate(val_loader, model, criterion, log_every=1):
             # compute loss
             loss = criterion(output, targets)
             losses.update(loss.item(), targets.size(0))
-            print(loss.item())
+            # print(loss.item())
+            f, (p, r) = f1_score(output, targets.float())
+            f1.update(f)
+            prec.update(p)
+            rec.update(r)
+
             # slightly smooth output
             output = torch.softmax(output, dim=1)
             pred = output.max(1, keepdim=True)[1].float()
@@ -88,11 +91,6 @@ def validate(val_loader, model, criterion, log_every=1):
             print(F1_measure)
             # store various accuracy measures
             acc.update(pred.eq(targets.view_as(pred)).float().mean().item(), targets.size(0))
-            f, (p, r) = f1_score(output, targets)
-
-            f1.update(f)
-            prec.update(p)
-            rec.update(r)
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -115,8 +113,8 @@ def validate(val_loader, model, criterion, log_every=1):
 
 
 def f1_score(output, target, epsilon=1e-7):
-    # output had softmax already applied
-    probas = (output[:, 1, :, :] > .5).float()
+    # turn output into 0-1 map
+    probas = (output[:, 1, :, :] > 0.).float()
 
     TP = (probas * target).sum(dim=1)
     precision = TP / (probas.sum(dim=1) + epsilon)
@@ -125,28 +123,21 @@ def f1_score(output, target, epsilon=1e-7):
     f1 = f1.clamp(min=epsilon, max=1-epsilon)
     return f1.mean().item(), (precision.mean().item(), recall.mean().item())
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--count-params", default=False, type=bool)
-args = parser.parse_args()
 
 cc = Configs()
 print("Loading stored model")
 model = SegnetConvLSTM(cc.hidden_dims, decoder_out_channels=2, lstm_nlayers=len(cc.hidden_dims),
                        vgg_decoder_config=cc.decoder_config)
-tu.load_model_checkpoint(model, '../train-results/latest_model.torch', inference=False, map_location=device)
+tu.load_model_checkpoint(model, '../train-results/model-fixed.torch', inference=False, map_location=device)
 model.to(device)
-if args.count_params:
-    counter = 0
-    for p in model.parameters():
-        counter += 1
-    print(f"Model loaded contains {counter} parameters")
 print("Model loaded")
 
-tu_test_dataset = TUSimpleDataset(config.tr_root, config.tr_subdirs, config.tr_flabels, shuffle=False)#, shuffle_seed=9)
+tu_test_dataset = TUSimpleDataset(config.ts_root, config.ts_subdirs, config.ts_flabels, shuffle=False)#, shuffle_seed=9)
 
 # build data loader
 tu_test_dataloader = DataLoader(tu_test_dataset, batch_size=cc.test_batch, shuffle=True, num_workers=2)
 
-criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.02, 1.02])).to(device) # using crossentropy for weighted loss
+# using crossentropy for weighted loss
+criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.02, 1.02])).to(device)
 
 validate(tu_test_dataloader, model, criterion, log_every=1)

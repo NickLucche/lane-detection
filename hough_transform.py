@@ -12,9 +12,9 @@ def do_canny(frame):
     canny = cv.Canny(blur, 50, 150)
     return canny
 
+
 def do_segment(frame):
-    # Since an image is a multi-directional array containing the relative intensities of each pixel in the image, we can use frame.shape to return a tuple: [number of rows, number of columns, number of channels] of the dimensions of the frame
-    # frame.shape[0] give us the number of rows of pixels the frame has. Since height begins from 0 at the top, the y-coordinate of the bottom of the frame is its height
+
     height = frame.shape[0]
     # Creates a triangular polygon for the mask defined by three (x, y) coordinates
     polygons = np.array([
@@ -27,6 +27,7 @@ def do_segment(frame):
     # A bitwise and operation between the mask and frame keeps only the triangular area of the frame
     segment = cv.bitwise_and(frame, mask)
     return segment
+
 
 def calculate_lines(frame, lines):
     # Empty arrays to store the coordinates of the left and right lines
@@ -75,29 +76,3 @@ def visualize_lines(frame, lines):
             cv.line(lines_visualize, (x1, y1), (x2, y2), (0, 255, 0), 5)
     return lines_visualize
 
-# The video feed is read in as a VideoCapture object
-cap = cv.VideoCapture("input.mp4")
-while (cap.isOpened()):
-    # ret = a boolean return value from getting the frame, frame = the current frame being projected in the video
-    ret, frame = cap.read()
-    canny = do_canny(frame)
-    cv.imshow("canny", canny)
-    # plt.imshow(frame)
-    # plt.show()
-    segment = do_segment(canny)
-    hough = cv.HoughLinesP(segment, 2, np.pi / 180, 100, np.array([]), minLineLength = 100, maxLineGap = 50)
-    # Averages multiple detected lines from hough into one line for left border of lane and one line for right border of lane
-    lines = calculate_lines(frame, hough)
-    # Visualizes the lines
-    lines_visualize = visualize_lines(frame, lines)
-    cv.imshow("hough", lines_visualize)
-    # Overlays lines on frame by taking their weighted sums and adding an arbitrary scalar value of 1 as the gamma argument
-    output = cv.addWeighted(frame, 0.9, lines_visualize, 1, 1)
-    # Opens a new window and displays the output frame
-    cv.imshow("output", output)
-    # Frames are read by intervals of 10 milliseconds. The programs breaks out of the while loop when the user presses the 'q' key
-    if cv.waitKey(10) & 0xFF == ord('q'):
-        break
-# The following frees up resources and closes all windows
-cap.release()
-cv.destroyAllWindows()
