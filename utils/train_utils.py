@@ -1,6 +1,8 @@
 import torch
+"""
+    Various utility methods used during model training.
+"""
 
-# classes from https://github.com/pytorch/examples/blob/1de2ff9338bacaaffa123d03ce53d7522d5dcc2e/imagenet/main.py#L354
 class AverageMeter(object):
     """Computes and stores the average and current value"""
     def __init__(self, name, fmt=':f'):
@@ -75,25 +77,3 @@ def load_model_checkpoint(model:torch.nn.Module, filename:str, inference:bool,
     else:
         model.train()
     return model.load_state_dict(checkpoint['model_state_dict'])
-
-
-def loss_weight_balance(labels:list):
-    """
-    Compute the ratio between pixels belonging
-    to the positive class (lanes) and all the
-    rest, due to the high unbalance in terms of
-    frequency in these two classes.
-    Result will be used to weight the computation
-    of the cross-entropy loss function.
-    :param labels: list of annotated data following
-        the tusimple format.
-    :return:
-    """
-
-    pos_pixels = 0
-    neg_pixels = 0
-    img_size = 1280*720/10
-    for l in labels:
-        for lane in l['lanes']:
-            pos_pixels += len([lval for lval in lane if lval>=0])
-            neg_pixels = img_size - pos_pixels

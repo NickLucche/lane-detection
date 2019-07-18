@@ -15,6 +15,12 @@ import cv2
 import argparse
 import time
 
+"""
+    This file is used to assess model results on
+    test set on measure like accuracy, precision, 
+    recall, f1 score and inference time.
+"""
+
 
 def validate(val_loader, model, criterion, log_every=1):
     batch_time = AverageMeter('Time', ':6.3f')
@@ -28,7 +34,7 @@ def validate(val_loader, model, criterion, log_every=1):
         [batch_time, losses, acc, f1, prec, rec],
         prefix='Test: ')
 
-    # evaluate mode highly decreases performance
+    # model.eval() evaluate mode highly decreases performance
     model.train()
 
     correct = 0
@@ -47,50 +53,13 @@ def validate(val_loader, model, criterion, log_every=1):
             # compute loss
             loss = criterion(output, targets)
             losses.update(loss.item(), targets.size(0))
-            # print(loss.item())
+            # compute f1 score
             f, (p, r) = f1_score(output, targets.float())
             f1.update(f)
             prec.update(p)
             rec.update(r)
-
-            # slightly smooth output
-            output = torch.softmax(output, dim=1)
-            pred = output.max(1, keepdim=True)[1].float()
-            img = torch.squeeze(pred).cpu().numpy() * 255
-            lab = torch.squeeze(targets).cpu().numpy() * 255
-            img = img.astype(np.uint8)
-            lab = lab.astype(np.uint8)
-            kernel = np.uint8(np.ones((3, 3)))
-            # accuracy
-            # pred = output.max(1, keepdim=True)[1]
-            targets = targets.float()
-            correct += pred.eq(targets.view_as(pred)).float().sum().item()
-
-            # precision,recall,f1
-            label_precision = cv2.dilate(lab, kernel)
-            pred_recall = cv2.dilate(img, kernel)
-            img = img.astype(np.int32)
-            lab = lab.astype(np.int32)
-            label_precision = label_precision.astype(np.int32)
-            pred_recall = pred_recall.astype(np.int32)
-            a = len(np.nonzero(img * label_precision)[1])
-            b = len(np.nonzero(img)[1])
-            if b == 0:
-                error = error + 1
-                continue
-            else:
-                precision += float(a / b)
-            c = len(np.nonzero(pred_recall * lab)[1])
-            d = len(np.nonzero(lab)[1])
-            if d == 0:
-                error = error + 1
-                continue
-            else:
-                recall += float(c / d)
-            F1_measure = (2 * precision * recall) / (precision + recall)
-            print(F1_measure)
-            # store various accuracy measures
-            acc.update(pred.eq(targets.view_as(pred)).float().mean().item(), targets.size(0))
+            # compute accuracy
+            acc.update(pixel_accuracy(output, targets), targets.size(0))
 
             # measure elapsed time
             batch_time.update(time.time() - end)
@@ -99,18 +68,20 @@ def validate(val_loader, model, criterion, log_every=1):
             if batch_no % log_every == 0:
                 progress.display(batch_no)
 
-        test_acc = 100. * int(correct) / (len(val_loader.dataset) * 128 * 256)
-        print('\nAccuracy: {}/{} ({:.5f}%)'.format(
-            int(correct), len(val_loader.dataset), test_acc))
+        return acc.avg
 
-        precision = precision / (len(val_loader.dataset) - error)
-        recall = recall / (len(val_loader.dataset) - error)
-        F1_measure = F1_measure / (len(val_loader.dataset) - error)
-        print('Precision: {:.5f}, Recall: {:.5f}, F1_measure: {:.5f}\n'.format(precision, recall, F1_measure))
-
-        # currently returning loss instead of accuracy
-        return losses.avg
-
+def pixel_accuracy(prediction:torch.Tensor, target:torch.Tensor):
+    """
+        Computes simple pixel-wise accuracy measure
+        between target lane and prediction map; this
+        measure has little meaning (if not backed up
+        by other metrics) in tasks like this where
+        there's a huge unbalance between 2 classes
+        (background and lanes pixels).
+    """
+    # get prediction positive channel (lanes)
+    out = (prediction[:, 1, :, :] > 0.).float()
+    return (out == target).float().mean().item()
 
 def f1_score(output, target, epsilon=1e-7):
     # turn output into 0-1 map

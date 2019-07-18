@@ -11,6 +11,21 @@ from utils.config import Configs
 from utils.cuda_device import device
 import matplotlib.pyplot as plt
 
+"""
+    This file was used to generate a lane-marked video sample
+    to assess visual quality of model output.
+    Input file is specified at line 26 while output video
+    filename is passed as argument to the script.
+    Frames are read from input video using a 'sliding window'
+    of size 5 (but any size can be tried), therefore getting a
+    prediction for every frame after the first 4.
+    Frames are written to video output stream 'live' as they 
+    get computed from model.
+    
+    Note that no particular efficiency method is taken into account
+    here, such as storing previous frames feature maps.
+"""
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--full-video-size", default=False, type=bool)
 parser.add_argument("--filename", default='my-video-marked.mp4', type=str)
@@ -93,15 +108,10 @@ while cap.isOpened():
             # add latest frame to sliding window
             inputs.append(f)
 
-        # Frames are read by intervals of 100 milliseconds. The programs breaks out of the while loop when the user presses the 'q' key
+        # Frames are read by intervals of 10 milliseconds. The programs breaks out of the while loop when the user presses the 'q' key
         if cv.waitKey(10) & 0xFF == ord('q'):
             break
-# save overlay video
-# height , width , layers =  output_frames[0].shape
-# video = cv.VideoWriter('../video-marked.mp4', -1, 15, (width, height))
-#
-# for frame in output_frames:
-#     video.write(frame)
+
 video.release()
 # The following frees up resources and closes all windows
 cap.release()

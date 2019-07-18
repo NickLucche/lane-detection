@@ -17,13 +17,13 @@ import torch
 class TUSimpleDataset(Dataset):
     """TUSimpleBenchmark dataset loader helper class. Filenames are kept in the
         __init__ method while actual image reading is delegated to __getitem__
-        method. For more info see https://github.com/TuSimple/tusimple-benchmark/tree/master/doc/lane_detection.
+        method. For more info on data format see
+        https://github.com/TuSimple/tusimple-benchmark/tree/master/doc/lane_detection.
     """
 
-    def __init__(self, root_dir:str, sub_dirs:list, data_labels:list, n_frames:int=5, shuffle=True, transforms=None, shuffle_seed=7):
+    def __init__(self, root_dir:str, sub_dirs:list, data_labels:list, n_frames:int=5, shuffle=True, shuffle_seed=7):
         """
-
-        :param root_dir: Root dir of the dataset
+        :param root_dir: Root dir of the dataset.
         :param sub_dirs: Root dir will contain some number of sub_dirs, into which actual
                         data is kept; each folder will contain 20 frames of a short video,
                         with the last frame being the annotated target.
@@ -31,17 +31,14 @@ class TUSimpleDataset(Dataset):
         :param n_frames: How many frames will compose an actual sample (length of single timeseries);
                         frames are counted backwards from target (20th frame).
         :param shuffle: Whether to shuffle samples.
-        :param transforms: Optional transform to be applied on a sample.
-        :param shuffle_seed
+        :param shuffle_seed: seed to use when shuffling samples.
         """
 
         self.root_dir = root_dir
         self.sub_dirs = sub_dirs
         assert n_frames>=1 and n_frames<20
         self.n_frames = n_frames
-        self.transform = transforms if transforms else None
         # data labels are read just once here and stored
-        # print("Loading data labels")
         labels = [json.loads(line) for d_label in data_labels for line in open(d_label, 'r')]
         # create map for efficient access to annotations, at the cost of some memory
         self.labels = {self.get_clip_id(label['raw_file']): label for label in labels}
@@ -50,8 +47,6 @@ class TUSimpleDataset(Dataset):
         self.sample_folders = []
         for sub_folder in sub_dirs:
             for sample_folder in os.listdir(os.path.join(root_dir, sub_folder)):
-                # add special char for recognizing target-samples
-                # self.sample_folders.append('~'.join([sub_folder, sample_folder]))
                 if not sample_folder.startswith('.'):
                     self.sample_folders.append(os.path.join(sub_folder, sample_folder))
 
@@ -66,9 +61,16 @@ class TUSimpleDataset(Dataset):
         return len(self.sample_folders)
 
     def __getitem__(self, idx):
-        # split sample_folders to get label and images dir
-        # label_file, sample_folder = self.sample_folders[idx].split('~')[0], self.sample_folders[idx].split('~')[1]
-
+        """
+        Load N frames into memory and generate target sample
+        from stored labels file.
+        Both frames and target are currently rescaled to fixed
+        size of 256x128.
+        Tensor transformation is also executed by default.
+        :param idx:
+        :return: tuple containing list of rescaled and
+            normalized frames and target.
+        """
         images_dir = os.path.join(self.root_dir, self.sample_folders[idx])
 
         # counting samples from target frame
@@ -93,24 +95,26 @@ class TUSimpleDataset(Dataset):
         target_ = self.to_tensor(target_)
         frames = [self.to_tensor(self.resize(f)/255.) for f in frames] # also normalize
 
-        # if self.transform:
-        #     frames = [self.transform(F.to_pil_image(sample)) for sample in frames]  # already normalized by PIL function
-        #     target_ = (self.transform(F.to_pil_image(target_)) > .5).float()
-
         return frames, target_
 
     def get_scaled_target(self, lanes:list, heights:list, original_shape:tuple, new_dim=(128, 256, 1)):
+        """
+        Generate normalized and rescaled target image;
+        rescaling is performed directly on label values
+        contained in file for efficiency.
+        :return: numpy image target of shape 'new_dim'.
+        """
         gt_lanes_vis = [[(x, y) for (x, y) in zip(lane, heights) if x >= 0] for lane in lanes]
         # target is a probability map
         image = np.zeros(new_dim).astype(np.float32)
         c = (1., 1., 1.)   # white lane points (normalized)
-        # c = (255, 255, 255)
+
         scale_factorY = new_dim[0] * (1./original_shape[0])
         scale_factorX = new_dim[1] * (1./original_shape[1])
         for lane in gt_lanes_vis:
             # rescale lane points
             lane = [(x*scale_factorX, y*scale_factorY) for (x, y) in lane]
-            cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=3)   # todo original value=5 for full size
+            cv2.polylines(image, np.int32([lane]), isClosed=False, color=c, thickness=3)   # original value is 5 for full size image
         # print(image.shape, image.max(), image.astype(np.uint8).mean(), image.sum())
 
         return image.astype(np.float32)
@@ -126,17 +130,24 @@ class TUSimpleDataset(Dataset):
             pass
 
     def resize(self, image, new_dim=(256, 128)):
+        # transform method for resizing a numpy image
         return cv2.resize(image, new_dim).astype(np.float32)
 
 
     def to_tensor(self, image):
-        # swap color axis because (assumed image has 3 channels)
-        # numpy image: H x W x C
+        # swap color axis because
+        # numpy image: H x W x C, while
         # torch image: C X H X W
         return torch.from_numpy(image.transpose((2, 0, 1)))
 
 
 def show_plain_images(images, n_frames, save=False, fname=None):
+    """
+    Utility method for plotting a series of images on a single row
+    using matplotlib.
+    Resulting plot can be optionally saved by passing 'save' and
+    'fname'.
+    """
     plt.figure(num=None, figsize=(20, 4), dpi=80)
     for i in range(n_frames):
         ax = plt.subplot(1, n_frames, i + 1)
@@ -177,7 +188,6 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
         image = cv2.imread(gt_frame_filename)
         if resize:
             image = cv2.resize(image, (256, 128))
-        c = (0, 255, 0)
 
     c = (255, 0, 0)
 
@@ -193,9 +203,9 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
         # imageb = cv2.resize(imageb, (256, 128))
         plt.imshow(imageb.astype(np.int32))
         plt.show()
-        # uint8 addition uses modulo (230+30=5)
 
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+    # uint8 addition uses modulo (230+30=5)
     imageb = imageb + image
     plt.imshow(imageb.astype(np.int32))
     if save:
@@ -206,8 +216,10 @@ def show_annotated_image(gt_lanes:list, gt_hsamples:list, gt_frame_filename:str=
     return imageb
 
 
-# original values: 3626 train sample - 2782 test samples
+# original values: 3626 train samples - 2782 test samples
 if __name__ == '__main__':
+    # ** Functions testing (might not be updated to reflect latest change in methods) **
+
     labels = [json.loads(line) for line in open('/Users/nick/Desktop/train_set/label_data_0531.json', 'r')]
     sample_no = 299
     for sample_no in range(0, 100, 10):

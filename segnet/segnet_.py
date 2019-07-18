@@ -4,13 +4,18 @@ import torch.nn as nn
 
 
 class Segnet(nn.Module):
-
-    def __init__(self, verbose=False):
+    """
+        Implementation of simple Segnet
+        network comes 'for free' since we
+        already implemented encoder and
+        decoder.
+    """
+    def __init__(self, decoder_out_channels, verbose=False):
         super(Segnet, self).__init__()
         self.verbose = verbose
 
-        self.encoder = encoder.VGGencoder(segnet_=verbose, verbose=verbose)
-        self.decoder = decoder.VGGDecoder(3, verbose=verbose)
+        self.encoder = encoder.VGGencoder(segnet_=True, verbose=verbose)
+        self.decoder = decoder.VGGDecoder(decoder_out_channels, verbose=verbose)
 
 
     def forward(self, x):
@@ -25,4 +30,3 @@ if __name__ == '__main__':
     segnet = Segnet(verbose=True)
     with torch.no_grad():
         print(segnet(torch.randn(10, 3, 128, 256)).numpy().shape)
-    # flush gradient buffer in training

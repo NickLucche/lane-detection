@@ -14,6 +14,10 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+""" 
+    Asses model output quality visually, by plotting
+    inputs-target-prediction.
+"""
 if __name__ == '__main__':
     # load model
     cc = Configs()
@@ -44,14 +48,11 @@ if __name__ == '__main__':
                         samples.append(a.squeeze())
                     else:
                         samples.append(b.squeeze())
-                    # print("samples info")
-                    # print(a.squeeze().size())
-                    # print(torch.max(a), torch.mean(a), torch.sum(a))
                 # print("Single target shape:", targets[i].size())
                 # print("Single output shape:", output[i][1, :, :].unsqueeze(0).size())
                 # o = cv2.addWeighted(samples[-1].permute(1, 2, 0).numpy(), 1., targets[i].permute(1, 2, 0).numpy().repeat(3, axis=2), 1, 0)
                 o = samples[0].permute(1, 2, 0).numpy() + targets[i].permute(1, 2, 0).numpy()
                 # plt.imshow(o.astype(np.float32))
                 # plt.show()
-                show_plain_images(samples + [targets[i]] + [output[i].unsqueeze(0)], len(samples) + 2, save=True,
+                show_plain_images(samples + [targets[i]] + [output[i].unsqueeze(0)], len(samples) + 2, save=False,
                                   fname=f'visual_{batchno}-{i}.png')

@@ -14,6 +14,13 @@ import cv2
 
 
 def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, epoch, log_every=1):
+    """
+    Do a training step, iterating over all batched samples
+    as returned by the DataLoader passed as argument.
+    Various measurements are taken and returned, such as
+    accuracy, loss, precision, recall, f1 and batch time.
+    """
+
     batch_time = AverageMeter('BatchTime', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -113,13 +120,8 @@ def pixel_accuracy(prediction:torch.Tensor, target:torch.Tensor):
 
 def f1_score(output, target, epsilon=1e-7):
     # output has to be passed though sigmoid and then thresholded
-    # this way we directly threshold it
+    # this way we directly threshold it efficiently
     probas = (output[:, 1, :, :] > 0.).float()
-
-    # apply dilation
-    # kernel = np.uint8(np.ones((3, 3)))
-    # target = cv2.dilate(target, kernel)
-    # probas = cv2.dilate(probas, kernel)
 
     TP = (probas * target).sum(dim=1)
     precision = TP / (probas.sum(dim=1) + epsilon)
@@ -135,7 +137,7 @@ def adjust_learning_rate(optimizer, epoch, init_lr):
         param_group['lr'] = lr
 
 
-# hyperparameters
+# hyperparameters configured in utils/config.py
 cc = config.Configs()
 epochs = cc.epochs
 init_lr = cc.init_lr
@@ -165,8 +167,8 @@ if cc.load_model:
 model.to(device)
 
 # define loss function (criterion) and optimizer
-# loss function is a binary crossentropy evaluated pixel-wise
-criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.02, 1.02])).to(device) # using crossentropy for weighted loss
+# using crossentropy for weighted loss on background and lane classes
+criterion = nn.CrossEntropyLoss(weight=torch.FloatTensor([0.02, 1.02])).to(device)
 # criterion = nn.BCEWithLogitsLoss(pos_weight=torch.FloatTensor([17.])).to(device)
 
 # optimizer = torch.optim.SGD(model.parameters(), lr, momentum=momentum, weight_decay=weight_decay)

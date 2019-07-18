@@ -2,6 +2,11 @@ import cv2
 import config
 import os
 import sys
+"""
+    Utility script used to create a video out of 
+    test set samples, 'stiching' contiguous frames
+    together.
+"""
 
 # get fps as script args
 fps = int(sys.argv[1])
@@ -14,9 +19,6 @@ try:
 except:
     print("Using default value for skip_first")
     skip_first = 0
-# labels = [json.loads(line) for d_label in config.ts_flabels for line in open(d_label, 'r')]
-# # create map for efficient access to annotations
-# labels = {label['raw_file']: label for label in labels}
 
 # get video frames of a day of shooting
 test_set_dir = config.ts_root + config.ts_subdirs[0]

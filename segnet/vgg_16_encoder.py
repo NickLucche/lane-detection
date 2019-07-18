@@ -4,8 +4,25 @@ import torchvision.models as models
 
 
 class VGGencoder(nn.Module):
-
+    """
+        This class implements a CNN encoder, more
+        specifically the encoder used by the fully
+        convolutional Segnet network for
+        semantic segmentation.
+        The encoder is obtained from the VGG16 architecture,
+        by removing the fully-connected part.
+        Max pool is performed storing indices, but
+        other implementation will be added of this encoder
+        (e.g. UNet, minor modification of VGG16,
+        storing feature maps before max pool operations).
+    """
     def __init__(self, segnet_:bool=True, pretrained=True, verbose=False):
+        """
+        :param segnet_: Whether to use the vgg16 encoder for the segnet;
+                    this is currently the only supported implementation,
+                    but UNet version of the encoder will soon be added.
+        :param pretrained: use ImageNet pre-trained weights for vgg16.
+        """
         super(VGGencoder, self).__init__()
         self.verbose = verbose
         # download pre-trained model with bn (batch normalization)
@@ -17,7 +34,6 @@ class VGGencoder(nn.Module):
         if segnet_:
             print("Instantiating Segnet encoder with max unpooling")
             params = vgg16.features.state_dict()
-            # print(next(self.vgg16.parameters()))
             layers = []
             for layer in vgg16.features.children():
                 if isinstance(layer, nn.MaxPool2d):
@@ -32,19 +48,15 @@ class VGGencoder(nn.Module):
             if verbose:
                 print(self.encoder)
         else:
-            print("Instantiating simple Segnet encoder (VGG16)")
-            self.encoder = nn.Sequential(*self.vgg16.features)
+            print("Instantiating UNet encoder")
             raise NotImplementedError()
-            # print(self.encoder)
 
     def forward(self, input:torch.Tensor):
-        # self.vgg16(input)
         x = input
         indices = []
         output_sizes = []
         if self.segnet_:
             for layer in self.encoder.children():
-                # print(x.shape)
                 if isinstance(layer, nn.MaxPool2d):
                     output_sizes.append(x.size())
                     x, index = layer(x)
@@ -58,9 +70,8 @@ class VGGencoder(nn.Module):
 
         return x, indices, output_sizes
 
+
 if __name__ == '__main__':
     encoder = VGGencoder(segnet_=True, verbose=True)
     with torch.no_grad():
         print(encoder(torch.randn((1, 3, 128, 256)))[0].numpy().shape)
-
-    # remember model.eval() or train() and move to cuda()

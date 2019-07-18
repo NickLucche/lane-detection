@@ -2,17 +2,35 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 class VGGDecoder(nn.Module):
+    """
+           This class implements a CNN decoder, more
+           specifically the decoder used by the fully
+           convolutional Segnet network for
+           semantic segmentation.
+           The decoder is obtained by mirroring the encoder
+           coming from the VGG16 architecture.
+           Unpool is performed through the indices stored by the
+           encoder, requiring no learning.
+           Other implementation will be added of this decoder
+           (e.g. UNet, concatenating feature maps from encoder).
+
+           Last convolution operation (64 channels->output_channels channels)
+           does not include ReLU or BatchNorm, so that output map
+           is not constrained and can take on negative
+           values (eases training and 0-output saturation).
+       """
     vgg_16_config = [512, 512, 256, 128, 64]
 
     def __init__(self, output_channels, config=None, verbose=False):
         """
-        Instantiate the decoder needed to build the segnet model.
+        Instantiate the decoder needed to build the segnet model
+        (currently only supported model).
         :param output_channels: number of channels the output needs
                 to have; this is referred as K, and it needs to be
                 the same as the number of classes we need to recognize
                 in a certain task.
-        :param verbose: 
         """
         super(VGGDecoder, self).__init__()
         # self.decoder = utils.VGG16utils.make_decoder_layers(batch_norm=batch_norm)
@@ -32,7 +50,7 @@ class VGGDecoder(nn.Module):
 
     def forward(self, input:torch.Tensor, indices:list, output_size:list):
         x = input
-        # revert list so that you get the correct indices
+        # revert list so that we get the correct indices
         indices = indices[::-1]
         output_size = output_size[::-1]
         if self.verbose:
@@ -75,5 +93,5 @@ class Decoder_block(nn.Module):
 
 if __name__ == "__main__":
     decoder = VGGDecoder(3, verbose=True)
-    #indeces must be tensor same shape as input all 0s but the max elem
+    # indeces must be tensor same shape as input all 0s but the max elem
 
