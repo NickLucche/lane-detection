@@ -4,6 +4,7 @@
  This repo contains my PyTorch implementation of the afore mentioned paper, a model having the following architecture:
  
  ![architecture](https://www.groundai.com/media/arxiv_projects/518710/x2.png)
+ 
  _*UNetConvLSTM implementation will (hopefully) follow soon._
  
  The model comprises of a fully-convolutional encoder-decoder network, which takes as input multiple contiguous frames, in order to exploit *spatiotemporal* relations of data, hoping to infer lane position from past information (very useful in case of car/shadow occlusion).
