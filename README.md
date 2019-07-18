@@ -1,7 +1,8 @@
 # Implementation of a SegnetConvLSTM for Lane Detection
 #### Please refer to the publication [Robust Lane Detection from Continuous DrivingScenes Using Deep Neural Networks](https://arxiv.org/pdf/1903.02193.pdf) by Qin Zou, Hanwen Jiang, Qiyu Dai, Yuanhao Yue, Long Chen, and Qian Wang for further information.
 
- This repo contains my PyTorch implementation of the above mentioned paper, with a model having the following architecture:
+ This repo contains my PyTorch implementation of the afore mentioned paper, a model having the following architecture:
+ 
  ![architecture](https://www.groundai.com/media/arxiv_projects/518710/x2.png)
  _*UNetConvLSTM implementation will (hopefully) follow soon._
  
