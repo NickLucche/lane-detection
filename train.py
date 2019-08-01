@@ -88,20 +88,20 @@ def train(train_loader:DataLoader, model:SegnetConvLSTM, criterion, optimizer, e
         # torch.cuda.empty_cache()
     return losses.avg, acc.avg, f1.avg
 
+# un-used, might be a measure to take into consideration (method must be re-implemented)
+# def IoU_accuracy(prediction, target):
+#     """
+#         Computes the intersection over union accuracy; this measure
+#         if often used in semantic segmentation tasks as well as
+#         object recognition tasks.
+#         Predictions whose IoUs are larger than certain threshold
+#         are viewed as true positives (TP).
+#     """
+#     # todo add 'border' to pixels
+#     intersection = np.logical_and(target, prediction)
+#     union = np.logical_or(target, prediction)
 
-def IoU_accuracy(prediction, target):
-    """
-        Computes the intersection over union accuracy; this measure
-        if often used in semantic segmentation tasks as well as
-        object recognition tasks.
-        Predictions whose IoUs are larger than certain threshold
-        are viewed as true positives (TP).
-    """
-    # todo add 'border' to pixels
-    intersection = np.logical_and(target, prediction)
-    union = np.logical_or(target, prediction)
-
-    return np.sum(intersection) / np.sum(union)
+#     return np.sum(intersection) / np.sum(union)
 
 
 def pixel_accuracy(prediction:torch.Tensor, target:torch.Tensor):
