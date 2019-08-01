@@ -30,5 +30,16 @@
 ![Imgur](https://i.imgur.com/vOjNR9u.png)
  
  Even better results can be obtained by simply training for a longer time on 
- a good GPU or also refining results with some CV techniques or trying to apply Markov 
- Random Fields for smoothing.
+ a good GPU or also refining/smoothing results with CV techniques or other neural/probabilistic models.
+ 
+# Usage
+ 
+ Make sure to download the 'TuSimple benchmark dataset' from https://github.com/TuSimple/tusimple-benchmark/issues/3,
+ since that's the one I used in my experiments and for which I provide a pytorch DataLoader (utils/data_utils.py).
+ The authors' of the paper augmented this dataset with additional data they recorded and labeled, and this is probably the biggest difference with the work they presented.
+ 
+ Once you have the data unpacked, head to utils/config.py and set the global variables as well as the hyperparameters for training from the file itself (variable name should be self-explanatory).
+ I know using _argparse_ would've offered a better interface in terms of usability, but I was too lazy to set that up during development.. my apologies.
+ 
+ I trained on a TeslaV100 for some hours(~4) and it took around ~0.3s per batch; this time should theoretically be divided by the number of frames in input if the feeding to the fully convolutional encoder was to be parallelized.  
+ 
