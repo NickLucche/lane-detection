@@ -3,7 +3,7 @@
 
  This repo contains my PyTorch implementation of the afore mentioned paper, a model having the following architecture:
  
- ![architecture](https://imgur.com/oW5ouzb)
+ ![architecture](https://i.imgur.com/oW5ouzb.png)
  
  _*UNetConvLSTM implementation will (hopefully) follow soon._
  
