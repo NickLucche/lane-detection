@@ -3,7 +3,7 @@
 
  This repo contains my PyTorch implementation of the afore mentioned paper, a model having the following architecture:
  
- ![architecture](https://www.groundai.com/media/arxiv_projects/518710/x2.png)
+ ![architecture](https://imgur.com/oW5ouzb)
  
  _*UNetConvLSTM implementation will (hopefully) follow soon._
  
@@ -24,10 +24,10 @@
  
  And here's some pictures:
  
-![Imgur](https://i.imgur.com/086ZAVu.png)
-![Imgur](https://i.imgur.com/yfT9dZM.png)
-![Imgur](https://i.imgur.com/Uyr5Mvo.png)
-![Imgur](https://i.imgur.com/vOjNR9u.png)
+![Result-1](https://i.imgur.com/086ZAVu.png)
+![Result-2](https://i.imgur.com/yfT9dZM.png)
+![Result-3](https://i.imgur.com/Uyr5Mvo.png)
+![Result-4](https://i.imgur.com/vOjNR9u.png)
  
  Even better results can be obtained by simply training for a longer time on 
  a good GPU or also refining/smoothing results with CV techniques or other neural/probabilistic models.
