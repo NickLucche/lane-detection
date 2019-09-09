@@ -46,5 +46,6 @@
 # Model & additional resources
 
 I also uploaded the trained model which is available [here](https://drive.google.com/file/d/123xT-45HuPkuPptqz_ce0GPZFhs8CtMU/view?usp=sharing).
+You can (visually) evaluate the results by running the script 'visual_evaluation.py' while you can (analytically) evaluate the results by running the 'test.py' script, both in the root folder; make sure you change the directory to point to the downloaded model when the model is loaded (I left my own 'fixed' directories here too.. again, sorry :P). 
 
 In case you're very very interested in the model architecture or the whole process you can take a look at the slides I utilized to introduce lane detection at the ML Milan Meetup at Politecnico di Milano on 09/05/19: here's the [power point version](https://drive.google.com/file/d/1hfW4FK8Kioz8QmK3uljXQY-W6uWuHelG/view?usp=sharing)(which I suggest because of animations and videos I used; I'll make sure to use a more shareable format next time) and the [pdf one](https://drive.google.com/file/d/1SUHWx8TT70efgoN1SQ-AIjEA8DyK-0Gw/view?usp=sharing).
