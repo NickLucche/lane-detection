@@ -43,3 +43,8 @@
  
  I trained on a TeslaV100 for some hours(~4) and it took around ~0.3s per batch; this time should theoretically be divided by the number of frames in input if the feeding to the fully convolutional encoder was to be parallelized.  
  
+# Model & additional resources
+
+I also uploaded the trained model which is available [here](https://drive.google.com/file/d/123xT-45HuPkuPptqz_ce0GPZFhs8CtMU/view?usp=sharing).
+
+In case you're very very interested in the model architecture or the whole process you can take a look at the slides I utilized to introduce lane detection at the ML Milan Meetup at Politecnico di Milano on 09/05/19: here's the [power point version](https://drive.google.com/file/d/1hfW4FK8Kioz8QmK3uljXQY-W6uWuHelG/view?usp=sharing)(which I suggest because of animations and videos I used; I'll make sure to use a more shareable format next time) and the [pdf one](https://drive.google.com/file/d/1SUHWx8TT70efgoN1SQ-AIjEA8DyK-0Gw/view?usp=sharing).
