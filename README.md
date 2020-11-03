@@ -36,16 +36,16 @@
  
  Make sure to download the 'TuSimple benchmark dataset' from https://github.com/TuSimple/tusimple-benchmark/issues/3,
  since that's the one I used in my experiments and for which I provide a pytorch DataLoader (utils/data_utils.py).
- The authors' of the paper augmented this dataset with additional data they recorded and labeled, and this is probably the biggest difference with the work they presented.
+ Also, you should download the `test_label.json` file you'll find right below in the linked page.
+ The authors' of the paper augmented this dataset with additional data they recorded and labeled, and this is probably the biggest difference with this work.
  
- Once you have the data unpacked, head to utils/config.py and set the global variables as well as the hyperparameters for training from the file itself (variable name should be self-explanatory).
- I know using _argparse_ would've offered a better interface in terms of usability, but I was too lazy to set that up during development.. my apologies.
+ Once you have the data unpacked, head to `utils/config.py` and set the global variables as well as the hyperparameters for training from the file itself (variable names should be self-explanatory).
  
  I trained on a TeslaV100 for some hours(~4) and it took around ~0.3s per batch; this time should theoretically be divided by the number of frames in input if the feeding to the fully convolutional encoder was to be parallelized.  
  
 # Model & additional resources
 
 I also uploaded the trained model which is available [here](https://drive.google.com/file/d/123xT-45HuPkuPptqz_ce0GPZFhs8CtMU/view?usp=sharing).
-You can (visually) evaluate the results by running the script 'visual_evaluation.py' while you can (analytically) evaluate the results by running the 'test.py' script, both in the root folder; make sure you change the directory to point to the downloaded model when the model is loaded (I left my own 'fixed' directories here too.. again, sorry :P). 
+You can (visually) evaluate the results by running the script 'visual_evaluation.py' while you can (analytically) evaluate the results by running the 'test.py' script, both in the root folder; make sure you change the directory to point to the downloaded model when the model is loaded (you can set it with the `-m` argument when running the script). 
 
 In case you're very very interested in the model architecture or the whole process you can take a look at the slides I utilized to introduce lane detection at the ML Milan Meetup at Politecnico di Milano on 09/05/19: here's the [power point version](https://drive.google.com/file/d/1hfW4FK8Kioz8QmK3uljXQY-W6uWuHelG/view?usp=sharing)(which I suggest because of animations and videos I used; I'll make sure to use a more shareable format next time) and the [pdf one](https://drive.google.com/file/d/1SUHWx8TT70efgoN1SQ-AIjEA8DyK-0Gw/view?usp=sharing).

@@ -10,9 +10,9 @@ tr_flabels = ['/Users/nick/Desktop/train_set/label_data_0601.json',
            '/Users/nick/Desktop/train_set/label_data_0531.json',
            '/Users/nick/Desktop/train_set/label_data_0313.json']
 
-ts_root = '/Users/nick/Desktop/test_set/clips/'
+ts_root = '/home/nick/datasets/tu-simple-dataset/test_set/clips/'
 ts_subdirs = ['0601', '0531', '0530']
-ts_flabels = ['/Users/nick/Desktop/test_set/test_labels.json']
+ts_flabels = ['/home/nick/datasets/tu-simple-dataset/test_set/test_label.json']
 
 data_dir = 'visual-results/'
 

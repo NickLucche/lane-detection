@@ -29,6 +29,8 @@ import matplotlib.pyplot as plt
 parser = argparse.ArgumentParser()
 parser.add_argument("--full-video-size", default=False, type=bool)
 parser.add_argument("--filename", default='my-video-marked.mp4', type=str)
+parser.add_argument("-m", '--model-path', required=True, type=str, help='Pre-trained model filepath')
+
 args = parser.parse_args()
 
 # The video feed is read in as a VideoCapture object
@@ -37,7 +39,7 @@ cc = Configs()
 model = SegnetConvLSTM(cc.hidden_dims, decoder_out_channels=2, lstm_nlayers=len(cc.hidden_dims),
                        vgg_decoder_config=cc.decoder_config)
 print("Loading model..")
-tu.load_model_checkpoint(model, '/Volumes/Samsung128/projects/ispr-project/train-results/model-fixed.torch', inference=False,
+tu.load_model_checkpoint(model, args.model_path, inference=False,
                          map_location=device)
 
 # frames to feed to the model
