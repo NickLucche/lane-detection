@@ -27,7 +27,7 @@ import matplotlib.pyplot as plt
 """
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--full-video-size", default=False, type=bool)
+parser.add_argument("--full-video-size", default=False, action='store_true')
 parser.add_argument("--filename", default='my-video-marked.mp4', type=str)
 parser.add_argument("-m", '--model-path', required=True, type=str, help='Pre-trained model filepath')
 
@@ -38,6 +38,7 @@ cap = cv.VideoCapture("../video2.mp4")
 cc = Configs()
 model = SegnetConvLSTM(cc.hidden_dims, decoder_out_channels=2, lstm_nlayers=len(cc.hidden_dims),
                        vgg_decoder_config=cc.decoder_config)
+model = model.to(device)
 print("Loading model..")
 tu.load_model_checkpoint(model, args.model_path, inference=False,
                          map_location=device)
@@ -46,7 +47,7 @@ tu.load_model_checkpoint(model, args.model_path, inference=False,
 inputs = []
 model.train()
 if args.full_video_size:
-    print("Using images at original scale")
+    print("Using images at original scale (720x1280)")
     zeros = np.zeros((720, 1280)).astype(np.uint8)
 else:
     zeros = np.zeros((128, 256)).astype(np.uint8)
@@ -57,15 +58,16 @@ for i in range(5):
     ret, frame = cap.read()
     # reshape frame to model input size
     f = cv.resize(frame, (256, 128)).astype(np.float32).transpose(2, 0, 1)
-    f = (torch.from_numpy(f) / 255.).unsqueeze(0)
+    f = (torch.from_numpy(f) / 255.).unsqueeze(0).to(device)
     inputs.append(f)
 
 # open video for writing lane marked frames
+fourcc = cv.VideoWriter_fourcc(*'XVID')
 if args.full_video_size:
-    video = cv.VideoWriter(args.filename, -1, 15, (1280, 720))
+    video = cv.VideoWriter(args.filename, fourcc, 15, (1280, 720))
 else:
-    video = cv.VideoWriter(args.filename, -1, 15, (256, 128))
-
+    video = cv.VideoWriter(args.filename, fourcc, 15, (256, 128))
+frame_no = 0
 while cap.isOpened():
     with torch.no_grad():
         # print("Input len:", len(inputs), [(ff.size(), ff.max().item()) for ff in inputs])
@@ -74,7 +76,7 @@ while cap.isOpened():
         marks = (marks > 0.).long()
 
         # overlay line markings to original image
-        marks = marks[:, 1, :, :].permute(1, 2, 0).numpy().reshape(128, 256)
+        marks = marks[:, 1, :, :].permute(1, 2, 0).cpu().numpy().reshape(128, 256)
         # get red lane markings (multiply then stack on red channel)
         marks = marks*255
 
@@ -91,24 +93,27 @@ while cap.isOpened():
 
         marks = np.stack([zeros, zeros, marks], axis=2).astype(np.uint8)
 
-        print("Overlay shape:", marks.shape, "Frame shape:", frame.shape)
+        print("Frame no:", frame_no, "Overlay shape:", marks.shape, "Frame shape:", frame.shape)
         output = cv.addWeighted(frame, 1, marks, 1, 0)
         # plt.imshow(output)
         # plt.show()
-
+        
         # cv.imshow("output", output)
         video.write(output)
         # output_frames.append(output)
 
         # update last frame
         ret, frame = cap.read()
+        frame_no += 1
         if ret:
             # slide all frames and ditch the first one
             inputs = [inputs[j] for j in range(1, len(inputs))]
             f = cv.resize(frame, (256, 128)).astype(np.float32).transpose(2, 0, 1)
-            f = (torch.from_numpy(f) / 255.).unsqueeze(0)
+            f = (torch.from_numpy(f) / 255.).unsqueeze(0).to(device)
             # add latest frame to sliding window
             inputs.append(f)
+        else:
+            break
 
         # Frames are read by intervals of 10 milliseconds. The programs breaks out of the while loop when the user presses the 'q' key
         if cv.waitKey(10) & 0xFF == ord('q'):
